@@ -7,6 +7,9 @@ import '../features/audit_log/audit_log_screen.dart';
 import '../features/auth/auth_provider.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/signup_screen.dart';
+import '../features/branch/branch_home_screen.dart';
+import '../features/branch/branch_signup_screen.dart';
+import '../features/branch/public_quote_screen.dart';
 import '../features/catalog/category_management_screen.dart';
 import '../features/catalog/product_form_screen.dart';
 import '../features/chat/chat_screen.dart';
@@ -30,6 +33,8 @@ import '../features/pos/sales_history_screen.dart';
 import '../features/reports/reports_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/staff/staff_screen.dart';
+import '../features/turbo/income_certificate_screen.dart';
+import '../features/turbo/insurance_screen.dart';
 import '../shared/app_shell.dart';
 
 /// Bridges Riverpod state changes into go_router's `refreshListenable`, so
@@ -46,6 +51,11 @@ class _AuthRefreshNotifier extends ChangeNotifier {
 const _ownerOnly = {'owner'};
 const _ownerAndManager = {'owner', 'manager'};
 
+// Redirect away from these if already authenticated (to the right "home"
+// for that account type) — unlike /quote, which is a standalone public page
+// nobody gets redirected to or away from.
+const _publicOnlyPaths = {'/login', '/signup', '/branch-signup'};
+
 /// Mirrors the backend's Permission grants (see
 /// `backend/app/core/permissions.py`) so a cashier can't even land on a
 /// screen whose API calls would all 403 — this is a UX fix, not a security
@@ -58,6 +68,8 @@ const _ownerAndManager = {'owner', 'manager'};
 Set<String>? allowedRolesForRoute(String path) {
   if (path == '/staff' || path == '/audit-log') return _ownerOnly;
   if (path == '/reports') return _ownerAndManager; // Permission.view_reports
+  if (path == '/turbo/income-certificate') return _ownerAndManager; // Permission.view_reports
+  if (path == '/turbo/insurance') return _ownerAndManager; // Permission.manage_insurance
   if (path == '/categories') return _ownerAndManager; // inline create/edit/delete needs manage_products
   if (path.startsWith('/suppliers') || path.startsWith('/purchase-orders')) {
     return _ownerAndManager; // Permission.adjust_inventory
@@ -77,16 +89,40 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/pos',
     refreshListenable: refresh,
     redirect: (context, state) {
+      final path = state.matchedLocation;
+      // A standalone public page (the O2O "เช็คเบี้ยใน 3 คลิก" quote form) —
+      // works the same whether or not the caller happens to be logged in,
+      // so it's never redirected to or away from.
+      if (path == '/quote') return null;
+
       final authState = ref.read(authControllerProvider);
-      final loggingIn = state.matchedLocation == '/login' || state.matchedLocation == '/signup';
+      final loggingIn = _publicOnlyPaths.contains(path);
 
       // Session restore hasn't resolved yet — stay put rather than bouncing to login.
       if (authState.status == AuthStatus.unknown) return null;
-      if (authState.status != AuthStatus.authenticated && !loggingIn) return '/login';
-      if (authState.status == AuthStatus.authenticated && loggingIn) return '/dashboard';
+      if (authState.status != AuthStatus.authenticated) {
+        return loggingIn ? null : '/login';
+      }
 
-      final allowedRoles = allowedRolesForRoute(state.matchedLocation);
       final role = authState.me?['role'] as String?;
+      final isBranchChampion = role == 'branch_champion';
+
+      if (loggingIn) {
+        return isBranchChampion ? '/branch' : '/dashboard';
+      }
+
+      // Branch accounts have no tenant_id and live entirely outside the shop
+      // shell (see Backend's UserRole.branch_champion) — every tenant route
+      // would just 403 for them, and vice versa a shop account has nothing
+      // to see under /branch.
+      if (isBranchChampion) {
+        return path.startsWith('/branch') ? null : '/branch';
+      }
+      if (path.startsWith('/branch')) {
+        return '/pos';
+      }
+
+      final allowedRoles = allowedRolesForRoute(path);
       if (allowedRoles != null && role != null && !allowedRoles.contains(role)) {
         return '/pos';
       }
@@ -95,6 +131,9 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(path: '/signup', builder: (context, state) => const SignupScreen()),
+      GoRoute(path: '/branch-signup', builder: (context, state) => const BranchSignupScreen()),
+      GoRoute(path: '/quote', builder: (context, state) => const PublicQuoteScreen()),
+      GoRoute(path: '/branch', builder: (context, state) => const BranchHomeScreen()),
       // Full-screen, outside the tab shell — these don't need the bottom nav visible.
       GoRoute(path: '/checkout', builder: (context, state) => const CheckoutScreen()),
       GoRoute(
@@ -107,6 +146,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/sales-history', builder: (context, state) => const SalesHistoryScreen()),
       GoRoute(path: '/reports', builder: (context, state) => const ReportsScreen()),
+      GoRoute(path: '/turbo/income-certificate', builder: (context, state) => const IncomeCertificateScreen()),
+      GoRoute(path: '/turbo/insurance', builder: (context, state) => const InsuranceScreen()),
       GoRoute(path: '/low-stock', builder: (context, state) => const LowStockScreen()),
       GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
       GoRoute(path: '/staff', builder: (context, state) => const StaffScreen()),

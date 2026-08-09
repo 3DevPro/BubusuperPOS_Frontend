@@ -33,9 +33,9 @@ class TurboPosApp extends ConsumerWidget {
 ThemeData _buildTurboTheme() {
   final base = ThemeData.dark(useMaterial3: true);
   final colorScheme = ColorScheme.dark(
-    primary: const Color(0xFFFF6D00),             // Electric Orange — primary CTA
+    primary: const Color(0xFFFF2D95),             // Turbo Pink — matches เงินเทอร์โบ's own brand pink, primary CTA
     onPrimary: Colors.white,
-    primaryContainer: const Color(0xFF1A237E),     // Deep Indigo
+    primaryContainer: const Color(0xFF1A237E),     // Deep Navy — matches the brand's blue accent
     secondary: const Color(0xFF00BFA5),            // Turbo Teal — success
     surface: const Color(0xFF0F1318),
     surfaceContainerHighest: const Color(0xFF1A1F2B),
@@ -63,7 +63,7 @@ ThemeData _buildTurboTheme() {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: const Color(0xFFFF6D00),
+        backgroundColor: const Color(0xFFFF2D95),
         foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
@@ -71,19 +71,19 @@ ThemeData _buildTurboTheme() {
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: const Color(0xFFFF6D00),
-        side: const BorderSide(color: Color(0xFFFF6D00)),
+        foregroundColor: const Color(0xFFFF2D95),
+        side: const BorderSide(color: Color(0xFFFF2D95)),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     ),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: const Color(0xFF141920),
-      indicatorColor: const Color(0xFFFF6D00).withAlpha(30),
+      indicatorColor: const Color(0xFFFF2D95).withAlpha(30),
       surfaceTintColor: Colors.transparent,
     ),
     navigationRailTheme: const NavigationRailThemeData(
       backgroundColor: Color(0xFF141920),
-      indicatorColor: Color(0x30FF6D00),
+      indicatorColor: Color(0x30FF2D95),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
@@ -98,7 +98,7 @@ ThemeData _buildTurboTheme() {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFFF6D00), width: 2),
+        borderSide: const BorderSide(color: Color(0xFFFF2D95), width: 2),
       ),
     ),
     dividerTheme: const DividerThemeData(color: Color(0xFF2A3040)),

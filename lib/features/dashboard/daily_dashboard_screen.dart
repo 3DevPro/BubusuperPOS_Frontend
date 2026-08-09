@@ -4,8 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../shared/formatters.dart';
+import '../auth/auth_provider.dart';
 import '../reports/reports_providers.dart';
 import '../reports/reports_repository.dart';
+import '../turbo/claim_banner.dart';
+import '../turbo/daily_close_card.dart';
 
 /// Today's summary — a separate provider so it doesn't interfere with the
 /// period-based one in the full reports screen.
@@ -30,6 +33,10 @@ class DailyDashboardScreen extends ConsumerWidget {
     final dailyAsync = ref.watch(_weeklySeriesProvider);
     final bestAsync = ref.watch(_bestSellersProvider);
     final cs = Theme.of(context).colorScheme;
+    final role = ref.watch(authControllerProvider).me?['role'] as String?;
+    // Matches Permission.manage_insurance server-side — a cashier's calls
+    // would just 403, so skip even asking rather than show-then-fail.
+    final canManageInsurance = role == 'owner' || role == 'manager';
 
     return Scaffold(
       appBar: AppBar(
@@ -39,7 +46,7 @@ class DailyDashboardScreen extends ConsumerWidget {
               width: 28, height: 28,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF1A237E), Color(0xFFFF6D00)],
+                  colors: [Color(0xFF1A237E), Color(0xFFFF2D95)],
                 ),
                 borderRadius: BorderRadius.circular(6),
               ),
@@ -112,13 +119,23 @@ class DailyDashboardScreen extends ConsumerWidget {
                         icon: Icons.inventory_2_rounded,
                         label: 'จำนวนชิ้น',
                         value: '${s.itemCount}',
-                        color: const Color(0xFFFF6D00),
+                        color: const Color(0xFFFF2D95),
                       )),
                     ],
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 20),
+
+            // ── Detected Insurance Claims ──
+            if (canManageInsurance) ...[
+              const ClaimBanner(),
+              const SizedBox(height: 16),
+            ],
+
+            // ── Daily Close ──
+            const DailyCloseCard(),
             const SizedBox(height: 32),
 
             // ── 7-Day Chart ──
@@ -165,8 +182,8 @@ class DailyDashboardScreen extends ConsumerWidget {
                           for (var i = 0; i < items.length; i++)
                             ListTile(
                               leading: CircleAvatar(
-                                backgroundColor: const Color(0xFFFF6D00).withAlpha(30),
-                                foregroundColor: const Color(0xFFFF6D00),
+                                backgroundColor: const Color(0xFFFF2D95).withAlpha(30),
+                                foregroundColor: const Color(0xFFFF2D95),
                                 child: Text('${i + 1}', style: const TextStyle(fontWeight: FontWeight.bold)),
                               ),
                               title: Text(items[i].name, style: const TextStyle(fontWeight: FontWeight.w500)),
@@ -302,7 +319,7 @@ class _GradientBarChart extends StatelessWidget {
                       gradient: const LinearGradient(
                         begin: Alignment.bottomCenter,
                         end: Alignment.topCenter,
-                        colors: [Color(0xFF1A237E), Color(0xFFFF6D00)],
+                        colors: [Color(0xFF1A237E), Color(0xFFFF2D95)],
                       ),
                       width: 22,
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),

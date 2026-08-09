@@ -86,6 +86,30 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
+  Future<void> branchSignup({
+    required String branchCode,
+    required String branchName,
+    required String province,
+    required String staffName,
+    required String email,
+    required String password,
+  }) async {
+    try {
+      await _repo.branchSignup(
+        branchCode: branchCode,
+        branchName: branchName,
+        province: province,
+        staffName: staffName,
+        email: email,
+        password: password,
+      );
+      final me = await _repo.me();
+      state = AuthState(status: AuthStatus.authenticated, me: me);
+    } on DioException catch (e) {
+      state = AuthState(status: AuthStatus.unauthenticated, error: _errorMessage(e));
+    }
+  }
+
   Future<void> logout() async {
     await _repo.logout();
     state = const AuthState(status: AuthStatus.unauthenticated);

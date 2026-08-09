@@ -33,6 +33,28 @@ class AuthRepository {
     await _saveTokens(resp.data);
   }
 
+  Future<void> branchSignup({
+    required String branchCode,
+    required String branchName,
+    required String province,
+    required String staffName,
+    required String email,
+    required String password,
+  }) async {
+    final resp = await _apiClient.dio.post(
+      '/api/v1/turbo/branch/signup',
+      data: {
+        'branch_code': branchCode,
+        'branch_name': branchName,
+        'province': province,
+        'staff_name': staffName,
+        'email': email,
+        'password': password,
+      },
+    );
+    await _saveTokens(resp.data);
+  }
+
   Future<Map<String, dynamic>> me() async {
     final resp = await _apiClient.dio.get('/api/v1/auth/me');
     return resp.data as Map<String, dynamic>;

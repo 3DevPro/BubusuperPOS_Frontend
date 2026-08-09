@@ -17,6 +17,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _submitting = false;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -74,8 +75,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _passwordController,
-                  decoration: const InputDecoration(labelText: 'รหัสผ่าน (อย่างน้อย 8 ตัว)'),
-                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'รหัสผ่าน (อย่างน้อย 8 ตัว)',
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    ),
+                  ),
+                  obscureText: _obscurePassword,
                 ),
                 const SizedBox(height: 16),
                 if (authState.error != null)

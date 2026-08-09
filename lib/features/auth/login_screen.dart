@@ -15,6 +15,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _submitting = false;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -63,7 +64,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         width: 64, height: 64,
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [Color(0xFF1A237E), Color(0xFFFF6D00)],
+                            colors: [Color(0xFF1A237E), Color(0xFFFF2D95)],
                           ),
                           borderRadius: BorderRadius.circular(16),
                         ),
@@ -84,8 +85,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(height: 12),
                       TextField(
                         controller: _passwordController,
-                        decoration: const InputDecoration(labelText: 'รหัสผ่าน'),
-                        obscureText: true,
+                        decoration: InputDecoration(
+                          labelText: 'รหัสผ่าน',
+                          suffixIcon: IconButton(
+                            icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                          ),
+                        ),
+                        obscureText: _obscurePassword,
                         onSubmitted: (_) => _submit(),
                       ),
                       const SizedBox(height: 16),
@@ -111,6 +118,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       TextButton(
                         onPressed: () => context.go('/signup'),
                         child: const Text('ยังไม่มีร้าน? สมัครใช้งาน'),
+                      ),
+                      TextButton(
+                        onPressed: () => context.go('/branch-signup'),
+                        child: const Text('พนักงานสาขา สมัครที่นี่', style: TextStyle(fontSize: 12)),
                       ),
                     ],
                   ),
