@@ -20,6 +20,7 @@ import '../features/suppliers/supplier_list_screen.dart';
 import '../features/inventory/inventory_screen.dart';
 import '../features/inventory/low_stock_screen.dart';
 import '../features/inventory/stock_adjust_screen.dart';
+import '../features/dashboard/daily_dashboard_screen.dart';
 import '../features/more/more_screen.dart';
 import '../features/pos/checkout_screen.dart';
 import '../features/pos/pos_screen.dart';
@@ -82,7 +83,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       // Session restore hasn't resolved yet — stay put rather than bouncing to login.
       if (authState.status == AuthStatus.unknown) return null;
       if (authState.status != AuthStatus.authenticated && !loggingIn) return '/login';
-      if (authState.status == AuthStatus.authenticated && loggingIn) return '/pos';
+      if (authState.status == AuthStatus.authenticated && loggingIn) return '/dashboard';
 
       final allowedRoles = allowedRolesForRoute(state.matchedLocation);
       final role = authState.me?['role'] as String?;
@@ -105,6 +106,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => RefundScreen(saleId: state.pathParameters['saleId']!),
       ),
       GoRoute(path: '/sales-history', builder: (context, state) => const SalesHistoryScreen()),
+      GoRoute(path: '/reports', builder: (context, state) => const ReportsScreen()),
       GoRoute(path: '/low-stock', builder: (context, state) => const LowStockScreen()),
       GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
       GoRoute(path: '/staff', builder: (context, state) => const StaffScreen()),
@@ -148,7 +150,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [GoRoute(path: '/inventory', builder: (context, state) => const InventoryScreen())],
           ),
           StatefulShellBranch(
-            routes: [GoRoute(path: '/reports', builder: (context, state) => const ReportsScreen())],
+            routes: [GoRoute(path: '/dashboard', builder: (context, state) => const DailyDashboardScreen())],
           ),
           StatefulShellBranch(
             routes: [GoRoute(path: '/chat', builder: (context, state) => const ChatScreen())],

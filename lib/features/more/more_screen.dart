@@ -30,6 +30,17 @@ class MoreScreen extends ConsumerWidget {
               ),
             ),
           const SizedBox(height: 8),
+          if (canManageInventory) ...[
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.bar_chart_rounded),
+                title: const Text('รายงานการขาย'),
+                subtitle: const Text('ดูรายงานยอดขาย สินค้าขายดี ส่งออก CSV'),
+                onTap: () => context.push('/reports'),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           Card(
             child: ListTile(
               leading: const Icon(Icons.settings),

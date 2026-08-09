@@ -13,7 +13,7 @@ class _NavDestination {
 const _destinations = [
   _NavDestination(Icons.point_of_sale, 'ขาย'),
   _NavDestination(Icons.inventory_2, 'สต็อก'),
-  _NavDestination(Icons.bar_chart, 'รายงาน'),
+  _NavDestination(Icons.dashboard_rounded, 'สรุป'),
   _NavDestination(Icons.smart_toy, 'ผู้ช่วย'),
   _NavDestination(Icons.more_horiz, 'เพิ่มเติม'),
 ];
