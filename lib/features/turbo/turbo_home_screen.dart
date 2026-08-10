@@ -224,7 +224,7 @@ class _DueReminderBanner extends StatelessWidget {
     final overdue = summary.hasOverdue;
     final color = overdue ? const Color(0xFFEF5350) : const Color(0xFFFFA726);
     final text = overdue
-        ? 'มีงวดค้างชำระ — ควรชำระโดยเร็ว'
+        ? 'ค้างชำระ ${summary.overdueCount} งวด รวม ${formatBaht(summary.overdueAmount)} (ช้าสุด ${summary.maxDaysOverdue} วัน)'
         : 'งวดถัดไปครบกำหนดอีก ${summary.dueInDays} วัน จำนวน ${formatBaht(summary.nextDueAmount!)}';
 
     return Padding(

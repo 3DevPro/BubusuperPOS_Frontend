@@ -378,6 +378,7 @@ class LoanInstallmentDto {
     required this.status,
     required this.paidAt,
     required this.isOverdue,
+    required this.daysOverdue,
   });
 
   final String id;
@@ -388,6 +389,7 @@ class LoanInstallmentDto {
   final String status;
   final DateTime? paidAt;
   final bool isOverdue;
+  final int? daysOverdue;
 
   factory LoanInstallmentDto.fromJson(Map<String, dynamic> json) => LoanInstallmentDto(
     id: json['id'] as String,
@@ -398,6 +400,7 @@ class LoanInstallmentDto {
     status: json['status'] as String,
     paidAt: json['paid_at'] == null ? null : DateTime.parse(json['paid_at'] as String),
     isOverdue: json['is_overdue'] as bool,
+    daysOverdue: json['days_overdue'] as int?,
   );
 }
 
@@ -412,6 +415,9 @@ class LoanAccountSummaryDto {
     required this.nextDueAmount,
     required this.dueInDays,
     required this.hasOverdue,
+    required this.overdueCount,
+    required this.overdueAmount,
+    required this.maxDaysOverdue,
   });
 
   final LoanAccountDto account;
@@ -423,6 +429,9 @@ class LoanAccountSummaryDto {
   final Decimal? nextDueAmount;
   final int? dueInDays;
   final bool hasOverdue;
+  final int overdueCount;
+  final Decimal overdueAmount;
+  final int? maxDaysOverdue;
 
   factory LoanAccountSummaryDto.fromJson(Map<String, dynamic> json) => LoanAccountSummaryDto(
     account: LoanAccountDto.fromJson(json['account'] as Map<String, dynamic>),
@@ -434,6 +443,9 @@ class LoanAccountSummaryDto {
     nextDueAmount: json['next_due_amount'] == null ? null : Decimal.parse(json['next_due_amount'] as String),
     dueInDays: json['due_in_days'] as int?,
     hasOverdue: json['has_overdue'] as bool,
+    overdueCount: json['overdue_count'] as int,
+    overdueAmount: Decimal.parse(json['overdue_amount'] as String),
+    maxDaysOverdue: json['max_days_overdue'] as int?,
   );
 }
 

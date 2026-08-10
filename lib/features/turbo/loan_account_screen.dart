@@ -145,7 +145,8 @@ class _InstallmentTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final paid = installment.status == 'paid';
     final color = paid ? const Color(0xFF66BB6A) : (installment.isOverdue ? const Color(0xFFEF5350) : const Color(0xFFFFA726));
-    final statusLabel = paid ? 'ชำระแล้ว' : (installment.isOverdue ? 'เกินกำหนด' : 'รอชำระ');
+    final statusLabel =
+        paid ? 'ชำระแล้ว' : (installment.isOverdue ? 'เกินกำหนด ${installment.daysOverdue} วัน' : 'รอชำระ');
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
