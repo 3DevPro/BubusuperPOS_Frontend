@@ -18,3 +18,7 @@ final leadsProvider = FutureProvider.autoDispose<List<LeadDto>>((ref) {
 final leaderboardProvider = FutureProvider.autoDispose<List<LeaderboardEntryDto>>((ref) {
   return ref.watch(branchRepositoryProvider).leaderboard();
 });
+
+final loanTermBoundsProvider = FutureProvider.autoDispose<List<LoanTermBoundsDto>>((ref) {
+  return ref.watch(branchRepositoryProvider).publicLoanTermBounds();
+});

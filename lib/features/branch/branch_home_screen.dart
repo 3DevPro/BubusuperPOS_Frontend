@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../shared/formatters.dart';
 import '../auth/auth_provider.dart';
 import 'branch_providers.dart';
 import 'branch_repository.dart';
@@ -14,6 +15,18 @@ const _prospectStatusLabels = {
   'not_interested': 'ไม่สนใจ',
 };
 const _leadStatusLabels = {'new': 'ใหม่', 'contacted': 'ติดต่อแล้ว', 'converted': 'ปิดได้แล้ว', 'lost': 'ไม่สำเร็จ'};
+const _leadSourceLabels = {
+  'o2o_web': 'จากเว็บ O2O',
+  'visit': 'จากการเยี่ยม',
+  'referral': 'แนะนำ',
+  'in_app': 'จากในแอป',
+};
+const _collateralKindLabels = {
+  'motorcycle': 'มอเตอร์ไซค์',
+  'car': 'รถยนต์',
+  'tractor': 'แทรกเตอร์',
+  'land_title': 'โฉนดที่ดิน',
+};
 const _slaTarget = Duration(minutes: 15);
 
 class BranchHomeScreen extends ConsumerWidget {
@@ -352,10 +365,23 @@ class _LeadCard extends ConsumerWidget {
                         [
                           if (lead.occupation != null) lead.occupation!,
                           if (lead.age != null) 'อายุ ${lead.age}',
-                          lead.source == 'o2o_web' ? 'จากเว็บ O2O' : lead.source,
+                          _leadSourceLabels[lead.source] ?? lead.source,
                         ].join(' · '),
                         style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 12),
                       ),
+                      if (lead.quotedLoanAmount != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          [
+                            'สินเชื่อ ${formatBaht(lead.quotedLoanAmount!)}',
+                            if (lead.quotedMonthlyInstallment != null)
+                              'ค่างวด ${formatBaht(lead.quotedMonthlyInstallment!)}/เดือน',
+                            if (lead.collateralKind != null)
+                              _collateralKindLabels[lead.collateralKind] ?? lead.collateralKind!,
+                          ].join(' · '),
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                      ],
                     ],
                   ),
                 ),

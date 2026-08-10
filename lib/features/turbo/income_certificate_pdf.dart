@@ -7,7 +7,12 @@ import 'package:printing/printing.dart';
 import '../../shared/formatters.dart';
 import 'turbo_repository.dart';
 
-const _creditTierLabels = {'none': 'ยังไม่ปลดล็อก', 'tier_1': 'ระดับ 1 (ปลดล็อกแล้ว)'};
+const _creditTierLabels = {
+  'none': 'ยังไม่ปลดล็อก',
+  'tier_1': 'ระดับ 1 (ปลดล็อกแล้ว)',
+  'tier_2': 'ระดับ 2 (ปลดล็อกแล้ว)',
+  'tier_3': 'ระดับ 3 (ปลดล็อกแล้ว)',
+};
 
 /// A4 document version of the income certificate the dashboard shows —
 /// same Thai-font pattern as receipt_pdf.dart (the default PDF base fonts
@@ -55,6 +60,7 @@ Future<Uint8List> buildIncomeCertificatePdf({required IncomeProfileDto profile, 
               _row('ระดับวงเงินที่ขอได้', _creditTierLabels[profile.creditTier] ?? profile.creditTier, bold: bold),
               _row('วงเงินที่ขอได้', formatBaht(profile.creditLimit), bold: bold),
               if (profile.nextTierInDays != null) _row('อีกกี่วันจะปลดล็อก', '${profile.nextTierInDays} วัน'),
+              if (profile.nextTierRequirement != null) _row('เงื่อนไขขั้นต่อไป', profile.nextTierRequirement!),
               pw.SizedBox(height: 24),
               pw.Text(
                 'เอกสารนี้สร้างจากข้อมูลการขายจริงในระบบ Turbo POS เพื่อใช้ประกอบการพิจารณาสินเชื่อ/เช่าพื้นที่ '

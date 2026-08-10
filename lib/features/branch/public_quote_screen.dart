@@ -14,6 +14,12 @@ const _collateralLabels = {
   'land_title': 'โฉนดที่ดิน',
 };
 
+class _TermRange {
+  const _TermRange(this.min, this.max);
+  final int min;
+  final int max;
+}
+
 /// Public O2O quote page — no login required (see router.dart, which keeps
 /// this path outside the auth redirect). "เช็คเบี้ยใน 3 คลิก" from the case,
 /// now with two tabs: the original insurance quote and a loan quote for the
@@ -246,9 +252,6 @@ class _LoanQuoteTabState extends ConsumerState<_LoanQuoteTab> {
   final _provinceController = TextEditingController();
 
   String _collateralKind = 'motorcycle';
-  // Overlaps every product's own [min_term_months, max_term_months] range
-  // (motorcycle 6-36, car 6-60, tractor 6-48, land_title 12-120), so any
-  // value on this slider is valid no matter which kind is picked.
   double _termMonths = 24;
 
   bool _submitting = false;
@@ -286,6 +289,8 @@ class _LoanQuoteTabState extends ConsumerState<_LoanQuoteTab> {
       _submitting = true;
       _error = null;
     });
+    final range = _rangeFor(ref.read(loanTermBoundsProvider).valueOrNull, _collateralKind);
+    final termMonths = _termMonths.clamp(range.min.toDouble(), range.max.toDouble()).round();
     try {
       final quote = await ref
           .read(branchRepositoryProvider)
@@ -297,7 +302,7 @@ class _LoanQuoteTabState extends ConsumerState<_LoanQuoteTab> {
             collateralKind: _collateralKind,
             collateralValue: collateralValue,
             requestedAmount: requestedAmount,
-            termMonths: _termMonths.round(),
+            termMonths: termMonths,
             province: _provinceController.text.trim(),
           );
       setState(() => _quote = quote);
@@ -311,15 +316,26 @@ class _LoanQuoteTabState extends ConsumerState<_LoanQuoteTab> {
     }
   }
 
+  _TermRange _rangeFor(List<LoanTermBoundsDto>? bounds, String collateralKind) {
+    if (bounds == null) return const _TermRange(12, 36); // fallback while loading/on error
+    for (final b in bounds) {
+      if (b.collateralKind == collateralKind) return _TermRange(b.minTermMonths, b.maxTermMonths);
+    }
+    return const _TermRange(12, 36);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bounds = ref.watch(loanTermBoundsProvider).valueOrNull;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
-      child: _quote == null ? _buildForm(context) : _buildResult(context, _quote!),
+      child: _quote == null ? _buildForm(context, bounds) : _buildResult(context, _quote!),
     );
   }
 
-  Widget _buildForm(BuildContext context) {
+  Widget _buildForm(BuildContext context, List<LoanTermBoundsDto>? bounds) {
+    final range = _rangeFor(bounds, _collateralKind);
+    final clampedTerm = _termMonths.clamp(range.min.toDouble(), range.max.toDouble());
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -338,7 +354,11 @@ class _LoanQuoteTabState extends ConsumerState<_LoanQuoteTab> {
               ChoiceChip(
                 label: Text(entry.value),
                 selected: _collateralKind == entry.key,
-                onSelected: (_) => setState(() => _collateralKind = entry.key),
+                onSelected: (_) => setState(() {
+                  _collateralKind = entry.key;
+                  final newRange = _rangeFor(bounds, entry.key);
+                  _termMonths = _termMonths.clamp(newRange.min.toDouble(), newRange.max.toDouble());
+                }),
               ),
           ],
         ),
@@ -371,13 +391,13 @@ class _LoanQuoteTabState extends ConsumerState<_LoanQuoteTab> {
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
         ),
         const SizedBox(height: 8),
-        Text('จำนวนงวด: ${_termMonths.round()} เดือน', style: const TextStyle(fontWeight: FontWeight.w600)),
+        Text('จำนวนงวด: ${clampedTerm.round()} เดือน', style: const TextStyle(fontWeight: FontWeight.w600)),
         Slider(
-          value: _termMonths,
-          min: 12,
-          max: 36,
-          divisions: 24,
-          label: '${_termMonths.round()} เดือน',
+          value: clampedTerm,
+          min: range.min.toDouble(),
+          max: range.max.toDouble(),
+          divisions: range.max > range.min ? range.max - range.min : null,
+          label: '${clampedTerm.round()} เดือน',
           onChanged: (v) => setState(() => _termMonths = v),
         ),
         TextField(controller: _provinceController, decoration: const InputDecoration(labelText: 'จังหวัด (ถ้ามี)')),

@@ -49,6 +49,9 @@ class LeadDto {
     required this.age,
     required this.quotedDailyBenefit,
     required this.quotedPremium,
+    required this.quotedLoanAmount,
+    required this.quotedMonthlyInstallment,
+    required this.collateralKind,
     required this.status,
     required this.firstResponseAt,
     required this.createdAt,
@@ -63,6 +66,9 @@ class LeadDto {
   final int? age;
   final Decimal? quotedDailyBenefit;
   final Decimal? quotedPremium;
+  final Decimal? quotedLoanAmount;
+  final Decimal? quotedMonthlyInstallment;
+  final String? collateralKind;
   final String status;
   final DateTime? firstResponseAt;
   final DateTime createdAt;
@@ -79,6 +85,13 @@ class LeadDto {
         ? null
         : Decimal.parse(json['quoted_daily_benefit'] as String),
     quotedPremium: json['quoted_premium'] == null ? null : Decimal.parse(json['quoted_premium'] as String),
+    quotedLoanAmount: json['quoted_loan_amount'] == null
+        ? null
+        : Decimal.parse(json['quoted_loan_amount'] as String),
+    quotedMonthlyInstallment: json['quoted_monthly_installment'] == null
+        ? null
+        : Decimal.parse(json['quoted_monthly_installment'] as String),
+    collateralKind: json['collateral_kind'] as String?,
     status: json['status'] as String,
     firstResponseAt: json['first_response_at'] == null ? null : DateTime.parse(json['first_response_at'] as String),
     createdAt: DateTime.parse(json['created_at'] as String),
@@ -147,6 +160,20 @@ class PublicLoanQuoteDto {
     monthlyInstallment: Decimal.parse(json['monthly_installment'] as String),
     totalInterest: Decimal.parse(json['total_interest'] as String),
     totalRepayment: Decimal.parse(json['total_repayment'] as String),
+  );
+}
+
+class LoanTermBoundsDto {
+  LoanTermBoundsDto({required this.collateralKind, required this.minTermMonths, required this.maxTermMonths});
+
+  final String collateralKind;
+  final int minTermMonths;
+  final int maxTermMonths;
+
+  factory LoanTermBoundsDto.fromJson(Map<String, dynamic> json) => LoanTermBoundsDto(
+    collateralKind: json['collateral_kind'] as String,
+    minTermMonths: json['min_term_months'] as int,
+    maxTermMonths: json['max_term_months'] as int,
   );
 }
 
@@ -252,5 +279,11 @@ class BranchRepository {
       },
     );
     return PublicLoanQuoteDto.fromJson(resp.data as Map<String, dynamic>);
+  }
+
+  /// Unauthenticated, same rationale as publicQuote/publicLoanQuote above.
+  Future<List<LoanTermBoundsDto>> publicLoanTermBounds() async {
+    final resp = await _apiClient.dio.get('/api/v1/turbo/public/loan-term-bounds');
+    return (resp.data as List).map((e) => LoanTermBoundsDto.fromJson(e as Map<String, dynamic>)).toList();
   }
 }
