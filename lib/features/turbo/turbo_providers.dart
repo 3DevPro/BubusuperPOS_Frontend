@@ -56,3 +56,26 @@ final activeDailyIncomePolicyProvider = FutureProvider.autoDispose<InsurancePoli
   }
   return null;
 });
+
+final loanProductsProvider = FutureProvider.autoDispose<List<LoanProductDto>>((ref) {
+  return ref.watch(turboRepositoryProvider).loanProducts();
+});
+
+final loanApplicationsProvider = FutureProvider.autoDispose<List<LoanApplicationDto>>((ref) {
+  return ref.watch(turboRepositoryProvider).loanApplications();
+});
+
+final loanAccountSummaryProvider = FutureProvider.autoDispose<LoanAccountSummaryDto?>((ref) {
+  return ref.watch(turboRepositoryProvider).loanAccountSummary();
+});
+
+final loanInstallmentsProvider = FutureProvider.autoDispose.family<List<LoanInstallmentDto>, String>((
+  ref,
+  accountId,
+) {
+  return ref.watch(turboRepositoryProvider).loanInstallments(accountId);
+});
+
+final creditStandingProvider = FutureProvider.autoDispose<CreditStandingDto>((ref) {
+  return ref.watch(turboRepositoryProvider).creditStanding();
+});

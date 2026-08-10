@@ -41,11 +41,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
+          // Brand pink fading to the same faint tint as the app's own
+          // scaffoldBackgroundColor (see main.dart) — matches turbo.co.th's
+          // own hero banner instead of assuming a dark theme.
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF1A237E), Color(0xFF0F1318), Color(0xFF0F1318)],
-            stops: [0.0, 0.4, 1.0],
+            colors: [Color(0xFFE5007D), Color(0xFFFDF7FA), Color(0xFFFDF7FA)],
+            stops: [0.0, 0.5, 1.0],
           ),
         ),
         child: Center(
@@ -64,7 +67,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         width: 64, height: 64,
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [Color(0xFF1A237E), Color(0xFFFF2D95)],
+                            colors: [Color(0xFF1A237E), Color(0xFFE5007D)],
                           ),
                           borderRadius: BorderRadius.circular(16),
                         ),

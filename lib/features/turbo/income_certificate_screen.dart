@@ -1,6 +1,7 @@
 import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
 
 import '../../shared/formatters.dart';
@@ -9,7 +10,12 @@ import 'income_certificate_pdf.dart';
 import 'turbo_providers.dart';
 import 'turbo_repository.dart';
 
-const _creditTierLabels = {'none': 'ยังไม่ปลดล็อก', 'tier_1': 'ระดับ 1 (ปลดล็อกแล้ว)'};
+const _creditTierLabels = {
+  'none': 'ยังไม่ปลดล็อก',
+  'tier_1': 'ระดับ 1 (ปลดล็อกแล้ว)',
+  'tier_2': 'ระดับ 2 (ปลดล็อกแล้ว)',
+  'tier_3': 'ระดับ 3 (ปลดล็อกแล้ว)',
+};
 
 class IncomeCertificateScreen extends ConsumerStatefulWidget {
   const IncomeCertificateScreen({super.key});
@@ -112,7 +118,7 @@ class _StreakCard extends StatelessWidget {
                       value: progress,
                       strokeWidth: 8,
                       backgroundColor: Colors.grey.withAlpha(40),
-                      valueColor: const AlwaysStoppedAnimation(Color(0xFFFF2D95)),
+                      valueColor: const AlwaysStoppedAnimation(Color(0xFFE5007D)),
                     ),
                   ),
                   Text('${profile.streakDays}/${total > 0 ? total : 30}', style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -227,6 +233,20 @@ class _CreditCard extends StatelessWidget {
             'คำนวณจากรายได้ที่ verify เต็มจำนวน + เงินสดครึ่งหนึ่ง เฉลี่ย ${formatBaht(profile.creditWeightedAvgDailyRevenue)}/วัน',
             style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 12),
           ),
+          if (profile.nextTierRequirement != null) ...[
+            const SizedBox(height: 8),
+            Text(profile.nextTierRequirement!, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+          ],
+          if (unlocked) ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => context.push('/turbo/loans/apply'),
+                child: const Text('ยื่นขอสินเชื่อ'),
+              ),
+            ),
+          ],
         ],
       ),
     );

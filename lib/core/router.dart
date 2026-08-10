@@ -35,6 +35,11 @@ import '../features/settings/settings_screen.dart';
 import '../features/staff/staff_screen.dart';
 import '../features/turbo/income_certificate_screen.dart';
 import '../features/turbo/insurance_screen.dart';
+import '../features/turbo/loan_account_screen.dart';
+import '../features/turbo/loan_apply_screen.dart';
+import '../features/turbo/loan_payment_screen.dart';
+import '../features/turbo/turbo_home_screen.dart';
+import '../features/turbo/turbo_repository.dart' show LoanInstallmentDto;
 import '../shared/app_shell.dart';
 
 /// Bridges Riverpod state changes into go_router's `refreshListenable`, so
@@ -70,6 +75,10 @@ Set<String>? allowedRolesForRoute(String path) {
   if (path == '/reports') return _ownerAndManager; // Permission.view_reports
   if (path == '/turbo/income-certificate') return _ownerAndManager; // Permission.view_reports
   if (path == '/turbo/insurance') return _ownerAndManager; // Permission.manage_insurance
+  // /turbo itself (the tab) has no restriction — TurboHomeScreen shows a
+  // permission notice to cashiers itself instead of bouncing them off the
+  // tab they just tapped, same UX rationale as /dashboard's canManageInsurance.
+  if (path.startsWith('/turbo/loans')) return _ownerAndManager; // Permission.manage_loans
   if (path == '/categories') return _ownerAndManager; // inline create/edit/delete needs manage_products
   if (path.startsWith('/suppliers') || path.startsWith('/purchase-orders')) {
     return _ownerAndManager; // Permission.adjust_inventory
@@ -148,6 +157,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/reports', builder: (context, state) => const ReportsScreen()),
       GoRoute(path: '/turbo/income-certificate', builder: (context, state) => const IncomeCertificateScreen()),
       GoRoute(path: '/turbo/insurance', builder: (context, state) => const InsuranceScreen()),
+      GoRoute(
+        path: '/turbo/loans/apply',
+        builder: (context, state) => LoanApplyScreen(productCode: state.uri.queryParameters['product']),
+      ),
+      GoRoute(path: '/turbo/loans/account', builder: (context, state) => const LoanAccountScreen()),
+      // No single "get installment by id" endpoint exists on Backend (only
+      // list-by-account and pay-by-id), so the full DTO the account screen
+      // already loaded travels via `extra` instead of being re-fetched by a
+      // path param — same go_router idiom used for the pending-action cards
+      // elsewhere in this app.
+      GoRoute(
+        path: '/turbo/loans/installments/pay',
+        builder: (context, state) => LoanPaymentScreen(installment: state.extra as LoanInstallmentDto),
+      ),
       GoRoute(path: '/low-stock', builder: (context, state) => const LowStockScreen()),
       GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
       GoRoute(path: '/staff', builder: (context, state) => const StaffScreen()),
@@ -192,6 +215,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           StatefulShellBranch(
             routes: [GoRoute(path: '/dashboard', builder: (context, state) => const DailyDashboardScreen())],
+          ),
+          StatefulShellBranch(
+            routes: [GoRoute(path: '/turbo', builder: (context, state) => const TurboHomeScreen())],
           ),
           StatefulShellBranch(
             routes: [GoRoute(path: '/chat', builder: (context, state) => const ChatScreen())],

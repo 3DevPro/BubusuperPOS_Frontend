@@ -46,7 +46,7 @@ class DailyDashboardScreen extends ConsumerWidget {
               width: 28, height: 28,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF1A237E), Color(0xFFFF2D95)],
+                  colors: [Color(0xFF1A237E), Color(0xFFE5007D)],
                 ),
                 borderRadius: BorderRadius.circular(6),
               ),
@@ -119,7 +119,7 @@ class DailyDashboardScreen extends ConsumerWidget {
                         icon: Icons.inventory_2_rounded,
                         label: 'จำนวนชิ้น',
                         value: '${s.itemCount}',
-                        color: const Color(0xFFFF2D95),
+                        color: const Color(0xFFE5007D),
                       )),
                     ],
                   ),
@@ -182,8 +182,8 @@ class DailyDashboardScreen extends ConsumerWidget {
                           for (var i = 0; i < items.length; i++)
                             ListTile(
                               leading: CircleAvatar(
-                                backgroundColor: const Color(0xFFFF2D95).withAlpha(30),
-                                foregroundColor: const Color(0xFFFF2D95),
+                                backgroundColor: const Color(0xFFE5007D).withAlpha(30),
+                                foregroundColor: const Color(0xFFE5007D),
                                 child: Text('${i + 1}', style: const TextStyle(fontWeight: FontWeight.bold)),
                               ),
                               title: Text(items[i].name, style: const TextStyle(fontWeight: FontWeight.w500)),
@@ -319,7 +319,7 @@ class _GradientBarChart extends StatelessWidget {
                       gradient: const LinearGradient(
                         begin: Alignment.bottomCenter,
                         end: Alignment.topCenter,
-                        colors: [Color(0xFF1A237E), Color(0xFFFF2D95)],
+                        colors: [Color(0xFF1A237E), Color(0xFFE5007D)],
                       ),
                       width: 22,
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),

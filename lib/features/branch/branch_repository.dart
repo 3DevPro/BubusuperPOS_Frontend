@@ -123,6 +123,33 @@ class PublicQuoteDto {
   );
 }
 
+class PublicLoanQuoteDto {
+  PublicLoanQuoteDto({
+    required this.approvedAmount,
+    required this.termMonths,
+    required this.monthlyInterestRate,
+    required this.monthlyInstallment,
+    required this.totalInterest,
+    required this.totalRepayment,
+  });
+
+  final Decimal approvedAmount;
+  final int termMonths;
+  final Decimal monthlyInterestRate;
+  final Decimal monthlyInstallment;
+  final Decimal totalInterest;
+  final Decimal totalRepayment;
+
+  factory PublicLoanQuoteDto.fromJson(Map<String, dynamic> json) => PublicLoanQuoteDto(
+    approvedAmount: Decimal.parse(json['approved_amount'] as String),
+    termMonths: json['term_months'] as int,
+    monthlyInterestRate: Decimal.parse(json['monthly_interest_rate'] as String),
+    monthlyInstallment: Decimal.parse(json['monthly_installment'] as String),
+    totalInterest: Decimal.parse(json['total_interest'] as String),
+    totalRepayment: Decimal.parse(json['total_repayment'] as String),
+  );
+}
+
 class BranchRepository {
   BranchRepository(this._apiClient);
   final ApiClient _apiClient;
@@ -196,5 +223,34 @@ class BranchRepository {
       },
     );
     return PublicQuoteDto.fromJson(resp.data as Map<String, dynamic>);
+  }
+
+  /// Unauthenticated, same rationale as publicQuote above.
+  Future<PublicLoanQuoteDto> publicLoanQuote({
+    required String name,
+    String? phone,
+    required String occupation,
+    required int age,
+    required String collateralKind,
+    required Decimal collateralValue,
+    required Decimal requestedAmount,
+    required int termMonths,
+    String? province,
+  }) async {
+    final resp = await _apiClient.dio.post(
+      '/api/v1/turbo/public/loan-quote',
+      data: {
+        'name': name,
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
+        'occupation': occupation,
+        'age': age,
+        'collateral_kind': collateralKind,
+        'collateral_value': collateralValue.toString(),
+        'requested_amount': requestedAmount.toString(),
+        'term_months': termMonths,
+        if (province != null && province.isNotEmpty) 'province': province,
+      },
+    );
+    return PublicLoanQuoteDto.fromJson(resp.data as Map<String, dynamic>);
   }
 }

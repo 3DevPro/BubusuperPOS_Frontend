@@ -40,24 +40,6 @@ class MoreScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 8),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.description_outlined),
-                title: const Text('ใบรับรองรายได้'),
-                subtitle: const Text('ประวัติการขาย 30 วัน วงเงินที่ขอได้ ส่งออก PDF'),
-                onTap: () => context.push('/turbo/income-certificate'),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.health_and_safety_outlined),
-                title: const Text('ประกันจิ๋ว'),
-                subtitle: const Text('ชดเชยรายได้ อุบัติเหตุ สุขภาพ ทรัพย์สินร้าน'),
-                onTap: () => context.push('/turbo/insurance'),
-              ),
-            ),
-            const SizedBox(height: 8),
           ],
           Card(
             child: ListTile(

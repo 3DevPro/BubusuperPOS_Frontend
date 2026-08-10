@@ -4,8 +4,20 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('allowedRolesForRoute', () {
     test('open routes have no restriction', () {
-      for (final path in ['/pos', '/inventory', '/chat', '/more', '/settings', '/checkout']) {
+      for (final path in ['/pos', '/inventory', '/chat', '/more', '/settings', '/checkout', '/turbo']) {
         expect(allowedRolesForRoute(path), isNull, reason: path);
+      }
+    });
+
+    test('turbo routes (matches manage_insurance / manage_loans / view_reports)', () {
+      final paths = [
+        '/turbo/income-certificate',
+        '/turbo/insurance',
+        '/turbo/loans/apply',
+        '/turbo/loans/account',
+      ];
+      for (final path in paths) {
+        expect(allowedRolesForRoute(path), {'owner', 'manager'}, reason: path);
       }
     });
 
