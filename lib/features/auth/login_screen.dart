@@ -63,20 +63,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       // ── Turbo Logo ──
-                      Container(
-                        width: 64, height: 64,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF1A237E), Color(0xFFE5007D)],
-                          ),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Icon(Icons.speed, size: 36, color: Colors.white),
-                      ),
-                      const SizedBox(height: 16),
-                      const Text('Turbo POS',
-                        style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 4),
+                      Image.asset('assets/images/turbo_logo.png', height: 56, fit: BoxFit.contain),
+                      const SizedBox(height: 12),
                       Text('ระบบจัดการร้านค้าอัจฉริยะ',
                         style: TextStyle(color: cs.outline, fontSize: 13)),
                       const SizedBox(height: 28),

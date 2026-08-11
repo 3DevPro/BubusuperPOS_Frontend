@@ -40,22 +40,7 @@ class DailyDashboardScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              width: 28, height: 28,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF1A237E), Color(0xFFE5007D)],
-                ),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Icon(Icons.speed, size: 16, color: Colors.white),
-            ),
-            const SizedBox(width: 10),
-            const Text('Turbo POS', style: TextStyle(fontWeight: FontWeight.bold)),
-          ],
-        ),
+        title: Image.asset('assets/images/turbo_logo.png', height: 44, fit: BoxFit.contain),
       ),
       body: RefreshIndicator(
         onRefresh: () async {
