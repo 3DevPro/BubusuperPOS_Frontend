@@ -230,6 +230,10 @@ class BranchRepository {
     return ProspectDto.fromJson(resp.data as Map<String, dynamic>);
   }
 
+  Future<void> deleteProspect(String prospectId) async {
+    await _apiClient.dio.delete('/api/v1/turbo/branch/prospects/$prospectId');
+  }
+
   Future<List<LeadDto>> listLeads() async {
     final resp = await _apiClient.dio.get('/api/v1/turbo/branch/leads');
     return (resp.data as List).map((e) => LeadDto.fromJson(e as Map<String, dynamic>)).toList();

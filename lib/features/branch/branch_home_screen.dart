@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -9,12 +10,6 @@ import 'branch_providers.dart';
 import 'branch_repository.dart';
 
 const _leadStatusLabels = {'new': 'ใหม่', 'contacted': 'ติดต่อแล้ว', 'converted': 'ปิดได้แล้ว', 'lost': 'ไม่สำเร็จ'};
-const _leadSourceLabels = {
-  'o2o_web': 'จากเว็บ O2O',
-  'visit': 'จากการเยี่ยม',
-  'referral': 'แนะนำ',
-  'in_app': 'จากในแอป',
-};
 const _collateralKindLabels = {
   'motorcycle': 'มอเตอร์ไซค์',
   'car': 'รถยนต์',
@@ -33,7 +28,17 @@ const _contactStatusLabels = {
   'called': 'โทรแล้ว',
   'met': 'นัดพบแล้ว',
 };
+const _leadProductInterestLabels = {'loan': 'สินเชื่อ', 'insurance': 'ประกัน'};
 const _slaTarget = Duration(minutes: 15);
+
+// A Lead's loan- and insurance-quote fields are mutually exclusive (see
+// Lead.quoted_loan_amount's comment in the backend model) so which one is
+// non-null is enough to tell what the lead is interested in.
+String? _leadProductInterest(LeadDto lead) {
+  if (lead.quotedLoanAmount != null) return 'loan';
+  if (lead.quotedDailyBenefit != null || lead.quotedPremium != null) return 'insurance';
+  return null;
+}
 
 // A blue picked to read clearly as "selected" against the brand pink
 // (0xFFEC1968) used elsewhere on these cards/badges — anything reddish would
@@ -101,6 +106,7 @@ class _ProspectsTabState extends ConsumerState<_ProspectsTab> {
   final _searchController = TextEditingController();
   String _query = '';
   String? _typeFilter;
+  String? _contactFilter;
 
   @override
   void dispose() {
@@ -111,6 +117,7 @@ class _ProspectsTabState extends ConsumerState<_ProspectsTab> {
   List<ProspectDto> _filtered(List<ProspectDto> prospects) {
     return prospects.where((p) {
       if (_typeFilter != null && p.businessType != _typeFilter) return false;
+      if (_contactFilter != null && p.contactStatus != _contactFilter) return false;
       if (_query.isEmpty) return true;
       return p.name.toLowerCase().contains(_query.toLowerCase());
     }).toList();
@@ -134,49 +141,76 @@ class _ProspectsTabState extends ConsumerState<_ProspectsTab> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 6,
-                        child: TextField(
-                          controller: _searchController,
-                          decoration: InputDecoration(
-                            hintText: 'ค้นหาชื่อร้าน',
-                            prefixIcon: const Icon(Icons.search),
-                            isDense: true,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            suffixIcon: _query.isEmpty
-                                ? null
-                                : IconButton(
-                                    icon: const Icon(Icons.clear),
-                                    onPressed: () => setState(() {
-                                      _searchController.clear();
-                                      _query = '';
-                                    }),
-                                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'ค้นหาชื่อร้าน',
+                      prefixIcon: const Icon(Icons.search),
+                      isDense: true,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      suffixIcon: _query.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () => setState(() {
+                                _searchController.clear();
+                                _query = '';
+                              }),
+                            ),
+                    ),
+                    onChanged: (v) => setState(() => _query = v),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(100),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String?>(
+                            initialValue: _typeFilter,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              isDense: true,
+                              filled: true,
+                              fillColor: Theme.of(context).colorScheme.surface,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            ),
+                            items: [
+                              const DropdownMenuItem(value: null, child: Text('ทุกประเภทร้าน')),
+                              for (final type in types) DropdownMenuItem(value: type, child: Text(type)),
+                            ],
+                            onChanged: (v) => setState(() => _typeFilter = v),
                           ),
-                          onChanged: (v) => setState(() => _query = v),
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        flex: 4,
-                        child: DropdownButtonFormField<String?>(
-                          initialValue: _typeFilter,
-                          isExpanded: true,
-                          decoration: InputDecoration(
-                            isDense: true,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: DropdownButtonFormField<String?>(
+                            initialValue: _contactFilter,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              isDense: true,
+                              filled: true,
+                              fillColor: Theme.of(context).colorScheme.surface,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            ),
+                            items: [
+                              const DropdownMenuItem(value: null, child: Text('ทุกสถานะการติดต่อ')),
+                              for (final entry in _contactStatusLabels.entries)
+                                DropdownMenuItem(value: entry.key, child: Text(entry.value)),
+                            ],
+                            onChanged: (v) => setState(() => _contactFilter = v),
                           ),
-                          items: [
-                            const DropdownMenuItem(value: null, child: Text('ทุกประเภทร้าน')),
-                            for (final type in types) DropdownMenuItem(value: type, child: Text(type)),
-                          ],
-                          onChanged: (v) => setState(() => _typeFilter = v),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
                 Expanded(
@@ -256,17 +290,22 @@ class _ProspectCard extends ConsumerWidget {
               if (prospect.note != null && prospect.note!.isNotEmpty) prospect.note!,
             ].join(' · ')),
             const SizedBox(height: 6),
-            if (prospect.applicationInterest != 'not_applied')
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  _badge(_applicationInterestLabels[prospect.applicationInterest] ?? prospect.applicationInterest, const Color(0xFFEC1968)),
-                ],
-              ),
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                Text(
+                  'ประวัติการสมัครสินเชื่อ/ประกัน:',
+                  style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.outline),
+                ),
+                _badge(_applicationInterestLabels[prospect.applicationInterest] ?? prospect.applicationInterest, const Color(0xFFEC1968)),
+              ],
+            ),
           ],
         ),
-        isThreeLine: prospect.applicationInterest != 'not_applied',
+        isThreeLine: true,
+        titleAlignment: ListTileTitleAlignment.center,
         trailing: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(color: color.withAlpha(30), borderRadius: BorderRadius.circular(10)),
@@ -412,6 +451,7 @@ class _VisitProspectSheetState extends ConsumerState<_VisitProspectSheet> {
   late String _contactStatus = widget.prospect.contactStatus;
   late final _noteController = TextEditingController(text: widget.prospect.note ?? '');
   bool _submitting = false;
+  bool _deleting = false;
 
   @override
   void dispose() {
@@ -434,6 +474,39 @@ class _VisitProspectSheetState extends ConsumerState<_VisitProspectSheet> {
     }
   }
 
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ลบร้านค้านี้?'),
+        content: Text('ต้องการลบ "${widget.prospect.name}" ใช่หรือไม่ การลบไม่สามารถย้อนกลับได้'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('ยกเลิก')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('ลบ'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _deleting = true);
+    try {
+      await ref.read(branchRepositoryProvider).deleteProspect(widget.prospect.id);
+      ref.invalidate(prospectsProvider);
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        final message = e is DioException ? (e.response?.data?['detail'] as String? ?? e.message) : '$e';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('ลบไม่สำเร็จ: $message')));
+      }
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final outline = Theme.of(context).colorScheme.outline;
@@ -445,7 +518,21 @@ class _VisitProspectSheetState extends ConsumerState<_VisitProspectSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(p.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Row(
+              children: [
+                Expanded(child: Text(p.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+                _deleting
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                      )
+                    : IconButton(
+                        icon: const Icon(Icons.delete_outline, color: Colors.red),
+                        tooltip: 'ลบร้านค้า',
+                        onPressed: _confirmDelete,
+                      ),
+              ],
+            ),
             const SizedBox(height: 4),
             Text(
               [
@@ -475,7 +562,7 @@ class _VisitProspectSheetState extends ConsumerState<_VisitProspectSheet> {
                   ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 18),
             TextField(controller: _noteController, decoration: const InputDecoration(labelText: 'บันทึกการติดต่อ')),
             const SizedBox(height: 20),
             SizedBox(
@@ -496,37 +583,209 @@ class _VisitProspectSheetState extends ConsumerState<_VisitProspectSheet> {
 
 // ── Leads ──
 
-class _LeadsTab extends ConsumerWidget {
+class _LeadsTab extends ConsumerStatefulWidget {
   const _LeadsTab();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_LeadsTab> createState() => _LeadsTabState();
+}
+
+class _LeadsTabState extends ConsumerState<_LeadsTab> {
+  final _searchController = TextEditingController();
+  String _query = '';
+  String? _statusFilter;
+  String? _interestFilter;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<LeadDto> _filtered(List<LeadDto> leads) {
+    return leads.where((l) {
+      if (_statusFilter != null && l.status != _statusFilter) return false;
+      if (_interestFilter != null && _leadProductInterest(l) != _interestFilter) return false;
+      if (_query.isEmpty) return true;
+      return l.name.toLowerCase().contains(_query.toLowerCase());
+    }).toList();
+  }
+
+  Widget _statCard(String label, int count, Color color, IconData icon) {
+    return Card(
+      color: color.withAlpha(18),
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: color.withAlpha(35), shape: BoxShape.circle),
+              child: Icon(icon, color: color, size: 18),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('$count', style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 20)),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final leadsAsync = ref.watch(leadsProvider);
 
     return leadsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => Center(child: Text('โหลดไม่สำเร็จ: $err')),
-      data: (leads) => RefreshIndicator(
-        onRefresh: () async => ref.invalidate(leadsProvider),
-        child: leads.isEmpty
-            ? ListView(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Text(
-                      'ยังไม่มี Lead เข้ามา',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Theme.of(context).colorScheme.outline),
-                    ),
-                  ),
-                ],
-              )
-            : ListView.builder(
-                padding: const EdgeInsets.all(12),
-                itemCount: leads.length,
-                itemBuilder: (context, i) => _LeadCard(lead: leads[i]),
+      data: (leads) {
+        final filtered = _filtered(leads);
+        final contacted = leads.where((l) => l.status == 'contacted').length;
+        final lost = leads.where((l) => l.status == 'lost').length;
+        final converted = leads.where((l) => l.status == 'converted').length;
+
+        return RefreshIndicator(
+          onRefresh: () async => ref.invalidate(leadsProvider),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final columns = constraints.maxWidth >= 700 ? 4 : 2;
+                    return GridView.count(
+                      crossAxisCount: columns,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: columns == 4 ? 2.8 : 2.4,
+                      children: [
+                        _statCard('Lead ทั้งหมด', leads.length, const Color(0xFF2F80ED), Icons.list_alt_rounded),
+                        _statCard('ติดต่อแล้ว', contacted, const Color(0xFFFFA726), Icons.call_rounded),
+                        _statCard('ไม่สำเร็จ', lost, Colors.grey, Icons.close_rounded),
+                        _statCard('ปิดได้แล้ว', converted, const Color(0xFF66BB6A), Icons.check_circle_rounded),
+                      ],
+                    );
+                  },
+                ),
               ),
-      ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 18, 12, 0),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'ค้นหาชื่อร้าน',
+                    prefixIcon: const Icon(Icons.search),
+                    isDense: true,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    suffixIcon: _query.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () => setState(() {
+                              _searchController.clear();
+                              _query = '';
+                            }),
+                          ),
+                  ),
+                  onChanged: (v) => setState(() => _query = v),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(100),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String?>(
+                          initialValue: _statusFilter,
+                          isExpanded: true,
+                          decoration: InputDecoration(
+                            isDense: true,
+                            filled: true,
+                            fillColor: Theme.of(context).colorScheme.surface,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: null, child: Text('ทุกสถานะ')),
+                            DropdownMenuItem(value: 'contacted', child: Text('ติดต่อแล้ว')),
+                            DropdownMenuItem(value: 'lost', child: Text('ไม่สำเร็จ')),
+                            DropdownMenuItem(value: 'converted', child: Text('ปิดได้แล้ว')),
+                          ],
+                          onChanged: (v) => setState(() => _statusFilter = v),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: DropdownButtonFormField<String?>(
+                          initialValue: _interestFilter,
+                          isExpanded: true,
+                          decoration: InputDecoration(
+                            isDense: true,
+                            filled: true,
+                            fillColor: Theme.of(context).colorScheme.surface,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: null, child: Text('ทุกผลิตภัณฑ์')),
+                            DropdownMenuItem(value: 'loan', child: Text('สินเชื่อ')),
+                            DropdownMenuItem(value: 'insurance', child: Text('ประกัน')),
+                          ],
+                          onChanged: (v) => setState(() => _interestFilter = v),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Expanded(
+                child: filtered.isEmpty
+                    ? ListView(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(32),
+                            child: Text(
+                              leads.isEmpty ? 'ยังไม่มี Lead เข้ามา' : 'ไม่พบ Lead ที่ตรงกับการค้นหา',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Theme.of(context).colorScheme.outline),
+                            ),
+                          ),
+                        ],
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: filtered.length,
+                        itemBuilder: (context, i) => _LeadCard(lead: filtered[i]),
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -537,6 +796,7 @@ class _LeadCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final outline = Theme.of(context).colorScheme.outline;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
@@ -551,13 +811,19 @@ class _LeadCard extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(lead.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      const SizedBox(height: 2),
+                      if (lead.occupation != null || lead.age != null)
+                        Text(
+                          [
+                            if (lead.occupation != null) lead.occupation!,
+                            if (lead.age != null) 'อายุ ${lead.age}',
+                          ].join(' · '),
+                          style: TextStyle(color: outline, fontSize: 12),
+                        ),
+                      const SizedBox(height: 2),
                       Text(
-                        [
-                          if (lead.occupation != null) lead.occupation!,
-                          if (lead.age != null) 'อายุ ${lead.age}',
-                          _leadSourceLabels[lead.source] ?? lead.source,
-                        ].join(' · '),
-                        style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 12),
+                        'สนใจ: ${_leadProductInterestLabels[_leadProductInterest(lead)] ?? 'ไม่ระบุ'}',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                       ),
                       if (lead.quotedLoanAmount != null) ...[
                         const SizedBox(height: 2),
@@ -572,6 +838,8 @@ class _LeadCard extends ConsumerWidget {
                           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                         ),
                       ],
+                      const SizedBox(height: 4),
+                      Text('Lead เข้ามา: ${formatThaiDateTime(lead.createdAt)}', style: TextStyle(color: outline, fontSize: 11)),
                     ],
                   ),
                 ),
