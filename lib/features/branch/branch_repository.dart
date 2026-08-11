@@ -10,6 +10,8 @@ class ProspectDto {
     required this.address,
     required this.phone,
     required this.status,
+    required this.applicationInterest,
+    required this.contactStatus,
     required this.note,
     required this.lastVisitedAt,
     required this.createdAt,
@@ -21,6 +23,8 @@ class ProspectDto {
   final String? address;
   final String? phone;
   final String status;
+  final String applicationInterest;
+  final String contactStatus;
   final String? note;
   final DateTime? lastVisitedAt;
   final DateTime createdAt;
@@ -32,6 +36,8 @@ class ProspectDto {
     address: json['address'] as String?,
     phone: json['phone'] as String?,
     status: json['status'] as String,
+    applicationInterest: json['application_interest'] as String,
+    contactStatus: json['contact_status'] as String,
     note: json['note'] as String?,
     lastVisitedAt: json['last_visited_at'] == null ? null : DateTime.parse(json['last_visited_at'] as String),
     createdAt: DateTime.parse(json['created_at'] as String),
@@ -191,6 +197,8 @@ class BranchRepository {
     String? businessType,
     String? address,
     String? phone,
+    String applicationInterest = 'not_applied',
+    String contactStatus = 'not_scheduled',
   }) async {
     final resp = await _apiClient.dio.post(
       '/api/v1/turbo/branch/prospects',
@@ -199,6 +207,8 @@ class BranchRepository {
         if (businessType != null && businessType.isNotEmpty) 'business_type': businessType,
         if (address != null && address.isNotEmpty) 'address': address,
         if (phone != null && phone.isNotEmpty) 'phone': phone,
+        'application_interest': applicationInterest,
+        'contact_status': contactStatus,
       },
     );
     return ProspectDto.fromJson(resp.data as Map<String, dynamic>);
@@ -208,6 +218,14 @@ class BranchRepository {
     final resp = await _apiClient.dio.post(
       '/api/v1/turbo/branch/prospects/$prospectId/visit',
       data: {'status': status, if (note != null && note.isNotEmpty) 'note': note},
+    );
+    return ProspectDto.fromJson(resp.data as Map<String, dynamic>);
+  }
+
+  Future<ProspectDto> updateProspectContactStatus(String prospectId, {required String contactStatus}) async {
+    final resp = await _apiClient.dio.post(
+      '/api/v1/turbo/branch/prospects/$prospectId/contact-status',
+      data: {'contact_status': contactStatus},
     );
     return ProspectDto.fromJson(resp.data as Map<String, dynamic>);
   }

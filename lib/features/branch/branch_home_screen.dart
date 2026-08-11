@@ -8,12 +8,6 @@ import '../auth/auth_provider.dart';
 import 'branch_providers.dart';
 import 'branch_repository.dart';
 
-const _prospectStatusLabels = {
-  'not_visited': 'ยังไม่ได้เยี่ยม',
-  'visited': 'เยี่ยมแล้ว',
-  'converted': 'สมัครแล้ว',
-  'not_interested': 'ไม่สนใจ',
-};
 const _leadStatusLabels = {'new': 'ใหม่', 'contacted': 'ติดต่อแล้ว', 'converted': 'ปิดได้แล้ว', 'lost': 'ไม่สำเร็จ'};
 const _leadSourceLabels = {
   'o2o_web': 'จากเว็บ O2O',
@@ -27,7 +21,39 @@ const _collateralKindLabels = {
   'tractor': 'แทรกเตอร์',
   'land_title': 'โฉนดที่ดิน',
 };
+const _applicationInterestLabels = {
+  'not_applied': 'ไม่เคยสมัคร',
+  'applied_loan': 'สินเชื่อ',
+  'applied_insurance': 'ประกัน',
+  'applied_both': 'ทั้งสองอย่าง',
+};
+const _contactStatusLabels = {
+  'unreachable': 'ติดต่อไม่ได้',
+  'not_scheduled': 'ยังไม่ได้นัดพบ',
+  'called': 'โทรแล้ว',
+  'met': 'นัดพบแล้ว',
+};
 const _slaTarget = Duration(minutes: 15);
+
+// A blue picked to read clearly as "selected" against the brand pink
+// (0xFFEC1968) used elsewhere on these cards/badges — anything reddish would
+// blend in, so selection state needed its own hue.
+const _chipSelectedColor = Color(0xFF2F80ED);
+
+Widget _choiceChip({required String label, required bool selected, required ValueChanged<bool> onSelected}) {
+  return ChoiceChip(
+    label: Text(label),
+    selected: selected,
+    onSelected: onSelected,
+    showCheckmark: false,
+    selectedColor: _chipSelectedColor.withAlpha(38),
+    labelStyle: TextStyle(
+      color: selected ? _chipSelectedColor : null,
+      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+    ),
+    side: BorderSide(color: selected ? _chipSelectedColor.withAlpha(130) : Colors.grey.withAlpha(60)),
+  );
+}
 
 class BranchHomeScreen extends ConsumerWidget {
   const BranchHomeScreen({super.key});
@@ -64,38 +90,119 @@ class BranchHomeScreen extends ConsumerWidget {
 
 // ── Prospects (Morning Route) ──
 
-class _ProspectsTab extends ConsumerWidget {
+class _ProspectsTab extends ConsumerStatefulWidget {
   const _ProspectsTab();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ProspectsTab> createState() => _ProspectsTabState();
+}
+
+class _ProspectsTabState extends ConsumerState<_ProspectsTab> {
+  final _searchController = TextEditingController();
+  String _query = '';
+  String? _typeFilter;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<ProspectDto> _filtered(List<ProspectDto> prospects) {
+    return prospects.where((p) {
+      if (_typeFilter != null && p.businessType != _typeFilter) return false;
+      if (_query.isEmpty) return true;
+      return p.name.toLowerCase().contains(_query.toLowerCase());
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final prospectsAsync = ref.watch(prospectsProvider);
 
     return Scaffold(
       body: prospectsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => Center(child: Text('โหลดไม่สำเร็จ: $err')),
-        data: (prospects) => RefreshIndicator(
-          onRefresh: () async => ref.invalidate(prospectsProvider),
-          child: prospects.isEmpty
-              ? ListView(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Text(
-                        'ยังไม่มีรายชื่อผู้ค้าในรัศมี กดปุ่ม + เพื่อเพิ่ม',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Theme.of(context).colorScheme.outline),
+        data: (prospects) {
+          final types = prospects.map((p) => p.businessType).whereType<String>().toSet().toList()..sort();
+          final filtered = _filtered(prospects);
+
+          return RefreshIndicator(
+            onRefresh: () async => ref.invalidate(prospectsProvider),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 6,
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: 'ค้นหาชื่อร้าน',
+                            prefixIcon: const Icon(Icons.search),
+                            isDense: true,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            suffixIcon: _query.isEmpty
+                                ? null
+                                : IconButton(
+                                    icon: const Icon(Icons.clear),
+                                    onPressed: () => setState(() {
+                                      _searchController.clear();
+                                      _query = '';
+                                    }),
+                                  ),
+                          ),
+                          onChanged: (v) => setState(() => _query = v),
+                        ),
                       ),
-                    ),
-                  ],
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: prospects.length,
-                  itemBuilder: (context, i) => _ProspectCard(prospect: prospects[i]),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        flex: 4,
+                        child: DropdownButtonFormField<String?>(
+                          initialValue: _typeFilter,
+                          isExpanded: true,
+                          decoration: InputDecoration(
+                            isDense: true,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          ),
+                          items: [
+                            const DropdownMenuItem(value: null, child: Text('ทุกประเภทร้าน')),
+                            for (final type in types) DropdownMenuItem(value: type, child: Text(type)),
+                          ],
+                          onChanged: (v) => setState(() => _typeFilter = v),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-        ),
+                Expanded(
+                  child: filtered.isEmpty
+                      ? ListView(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(32),
+                              child: Text(
+                                prospects.isEmpty ? 'ยังไม่มีรายชื่อผู้ค้าในรัศมี กดปุ่ม + เพื่อเพิ่ม' : 'ไม่พบผู้ค้าที่ตรงกับการค้นหา',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Theme.of(context).colorScheme.outline),
+                              ),
+                            ),
+                          ],
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(12),
+                          itemCount: filtered.length,
+                          itemBuilder: (context, i) => _ProspectCard(prospect: filtered[i]),
+                        ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => showModalBottomSheet(
@@ -115,17 +222,23 @@ class _ProspectCard extends ConsumerWidget {
   final ProspectDto prospect;
 
   Color _statusColor() {
-    switch (prospect.status) {
-      case 'visited':
+    switch (prospect.contactStatus) {
+      case 'called':
         return const Color(0xFF42A5F5);
-      case 'converted':
+      case 'met':
         return const Color(0xFF66BB6A);
-      case 'not_interested':
+      case 'unreachable':
         return Colors.grey;
       default:
         return const Color(0xFFFFA726);
     }
   }
+
+  Widget _badge(String label, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(color: color.withAlpha(30), borderRadius: BorderRadius.circular(10)),
+    child: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11)),
+  );
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -134,16 +247,31 @@ class _ProspectCard extends ConsumerWidget {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         title: Text(prospect.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text([
-          if (prospect.businessType != null) prospect.businessType!,
-          if (prospect.phone != null) prospect.phone!,
-          if (prospect.note != null && prospect.note!.isNotEmpty) prospect.note!,
-        ].join(' · ')),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text([
+              if (prospect.businessType != null) prospect.businessType!,
+              if (prospect.phone != null) prospect.phone!,
+              if (prospect.note != null && prospect.note!.isNotEmpty) prospect.note!,
+            ].join(' · ')),
+            const SizedBox(height: 6),
+            if (prospect.applicationInterest != 'not_applied')
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  _badge(_applicationInterestLabels[prospect.applicationInterest] ?? prospect.applicationInterest, const Color(0xFFEC1968)),
+                ],
+              ),
+          ],
+        ),
+        isThreeLine: prospect.applicationInterest != 'not_applied',
         trailing: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(color: color.withAlpha(30), borderRadius: BorderRadius.circular(10)),
           child: Text(
-            _prospectStatusLabels[prospect.status] ?? prospect.status,
+            _contactStatusLabels[prospect.contactStatus] ?? prospect.contactStatus,
             style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11),
           ),
         ),
@@ -169,6 +297,9 @@ class _AddProspectSheetState extends ConsumerState<_AddProspectSheet> {
   final _nameController = TextEditingController();
   final _typeController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _addressController = TextEditingController();
+  String _applicationInterest = 'not_applied';
+  String _contactStatus = 'not_scheduled';
   bool _submitting = false;
 
   @override
@@ -176,6 +307,7 @@ class _AddProspectSheetState extends ConsumerState<_AddProspectSheet> {
     _nameController.dispose();
     _typeController.dispose();
     _phoneController.dispose();
+    _addressController.dispose();
     super.dispose();
   }
 
@@ -189,6 +321,9 @@ class _AddProspectSheetState extends ConsumerState<_AddProspectSheet> {
             name: _nameController.text.trim(),
             businessType: _typeController.text.trim(),
             phone: _phoneController.text.trim(),
+            address: _addressController.text.trim(),
+            applicationInterest: _applicationInterest,
+            contactStatus: _contactStatus,
           );
       ref.invalidate(prospectsProvider);
       if (mounted) Navigator.of(context).pop();
@@ -201,32 +336,64 @@ class _AddProspectSheetState extends ConsumerState<_AddProspectSheet> {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: MediaQuery.of(context).viewInsets.bottom + 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('เพิ่มผู้ค้าในรัศมี', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
-          TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'ชื่อร้าน/ผู้ค้า')),
-          const SizedBox(height: 12),
-          TextField(controller: _typeController, decoration: const InputDecoration(labelText: 'ประเภทร้าน (ถ้ามี)')),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _phoneController,
-            decoration: const InputDecoration(labelText: 'เบอร์โทร (ถ้ามี)'),
-            keyboardType: TextInputType.phone,
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: _submitting ? null : _submit,
-              child: _submitting
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('บันทึก'),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('เพิ่มผู้ค้า', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'ชื่อร้าน/ผู้ค้า')),
+            const SizedBox(height: 12),
+            TextField(controller: _typeController, decoration: const InputDecoration(labelText: 'ประเภทร้าน')),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _phoneController,
+              decoration: const InputDecoration(labelText: 'เบอร์โทรศัพท์'),
+              keyboardType: TextInputType.phone,
             ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            Text('ประวัติการสมัครสินเชื่อ/ประกัน', style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 12)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final entry in _applicationInterestLabels.entries)
+                  _choiceChip(
+                    label: entry.value,
+                    selected: _applicationInterest == entry.key,
+                    onSelected: (_) => setState(() => _applicationInterest = entry.key),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text('สถานะการติดต่อล่าสุด', style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 12)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final entry in _contactStatusLabels.entries)
+                  _choiceChip(
+                    label: entry.value,
+                    selected: _contactStatus == entry.key,
+                    onSelected: (_) => setState(() => _contactStatus = entry.key),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _submitting ? null : _submit,
+                child: _submitting
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('บันทึก'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -241,7 +408,8 @@ class _VisitProspectSheet extends ConsumerStatefulWidget {
 }
 
 class _VisitProspectSheetState extends ConsumerState<_VisitProspectSheet> {
-  late String _status = widget.prospect.status == 'not_visited' ? 'visited' : widget.prospect.status;
+  late final String _status = widget.prospect.status == 'not_visited' ? 'visited' : widget.prospect.status;
+  late String _contactStatus = widget.prospect.contactStatus;
   late final _noteController = TextEditingController(text: widget.prospect.note ?? '');
   bool _submitting = false;
 
@@ -254,9 +422,11 @@ class _VisitProspectSheetState extends ConsumerState<_VisitProspectSheet> {
   Future<void> _submit() async {
     setState(() => _submitting = true);
     try {
-      await ref
-          .read(branchRepositoryProvider)
-          .visitProspect(widget.prospect.id, status: _status, note: _noteController.text.trim());
+      final repo = ref.read(branchRepositoryProvider);
+      await Future.wait([
+        repo.visitProspect(widget.prospect.id, status: _status, note: _noteController.text.trim()),
+        repo.updateProspectContactStatus(widget.prospect.id, contactStatus: _contactStatus),
+      ]);
       ref.invalidate(prospectsProvider);
       if (mounted) Navigator.of(context).pop();
     } finally {
@@ -266,39 +436,59 @@ class _VisitProspectSheetState extends ConsumerState<_VisitProspectSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final outline = Theme.of(context).colorScheme.outline;
+    final p = widget.prospect;
     return Padding(
       padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: MediaQuery.of(context).viewInsets.bottom + 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(widget.prospect.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final status in ['visited', 'converted', 'not_interested'])
-                ChoiceChip(
-                  label: Text(_prospectStatusLabels[status]!),
-                  selected: _status == status,
-                  onSelected: (_) => setState(() => _status = status),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          TextField(controller: _noteController, decoration: const InputDecoration(labelText: 'บันทึกการเยี่ยม')),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: _submitting ? null : _submit,
-              child: _submitting
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('บันทึกผลการเยี่ยม'),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(p.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(
+              [
+                if (p.businessType != null && p.businessType!.isNotEmpty) p.businessType!,
+                if (p.phone != null && p.phone!.isNotEmpty) p.phone!,
+                if (p.address != null && p.address!.isNotEmpty) p.address!,
+              ].join(' · '),
+              style: TextStyle(color: outline),
             ),
-          ),
-        ],
+            const SizedBox(height: 6),
+            Text(
+              'ประวัติการสมัครสินเชื่อ/ประกัน: ${_applicationInterestLabels[p.applicationInterest] ?? p.applicationInterest}',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+            ),
+            const SizedBox(height: 20),
+            const Text('สถานะการติดต่อ', style: TextStyle(color: Colors.black, fontSize: 12)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final entry in _contactStatusLabels.entries)
+                  _choiceChip(
+                    label: entry.value,
+                    selected: _contactStatus == entry.key,
+                    onSelected: (_) => setState(() => _contactStatus = entry.key),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextField(controller: _noteController, decoration: const InputDecoration(labelText: 'บันทึกการติดต่อ')),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _submitting ? null : _submit,
+                child: _submitting
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('บันทึกการติดต่อ'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
