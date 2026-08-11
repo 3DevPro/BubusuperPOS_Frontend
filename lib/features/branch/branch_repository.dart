@@ -109,6 +109,7 @@ class LeaderboardEntryDto {
     required this.branchId,
     required this.branchName,
     required this.prospectsVisited,
+    required this.prospectsContacted,
     required this.leadsContacted,
     required this.score,
   });
@@ -116,6 +117,7 @@ class LeaderboardEntryDto {
   final String branchId;
   final String branchName;
   final int prospectsVisited;
+  final int prospectsContacted;
   final int leadsContacted;
   final int score;
 
@@ -123,6 +125,7 @@ class LeaderboardEntryDto {
     branchId: json['branch_id'] as String,
     branchName: json['branch_name'] as String,
     prospectsVisited: json['prospects_visited'] as int,
+    prospectsContacted: json['prospects_contacted'] as int,
     leadsContacted: json['leads_contacted'] as int,
     score: json['score'] as int,
   );

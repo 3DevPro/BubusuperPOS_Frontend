@@ -948,6 +948,12 @@ class _SlaCountdownState extends State<_SlaCountdown> {
 class _LeaderboardTab extends ConsumerWidget {
   const _LeaderboardTab();
 
+  static const _rankColors = [
+    Color(0xFFFFC107), // gold
+    Color(0xFFB0BEC5), // silver
+    Color(0xFFCD8A4E), // bronze
+  ];
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final leaderboardAsync = ref.watch(leaderboardProvider);
@@ -959,29 +965,156 @@ class _LeaderboardTab extends ConsumerWidget {
       error: (err, _) => Center(child: Text('โหลดไม่สำเร็จ: $err')),
       data: (entries) => RefreshIndicator(
         onRefresh: () async => ref.invalidate(leaderboardProvider),
-        child: ListView(
-          padding: const EdgeInsets.all(12),
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-              child: Text('7 วันล่าสุด', style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 12)),
-            ),
-            for (var i = 0; i < entries.length; i++)
-              Card(
-                color: entries[i].branchId == myBranchId ? const Color(0xFFEC1968).withAlpha(20) : null,
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: i == 0 ? const Color(0xFFFFA726) : Colors.grey.withAlpha(60),
-                    child: Text('${i + 1}', style: const TextStyle(fontWeight: FontWeight.bold)),
+        child: entries.isEmpty
+            ? ListView(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Text(
+                      'ยังไม่มีข้อมูลอันดับสาขา',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Theme.of(context).colorScheme.outline),
+                    ),
                   ),
-                  title: Text(entries[i].branchName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('เยี่ยม ${entries[i].prospectsVisited} ร้าน · ติดต่อ Lead ${entries[i].leadsContacted} ราย'),
-                  trailing: Text('${entries[i].score} คะแนน', style: const TextStyle(fontWeight: FontWeight.bold)),
-                ),
+                ],
+              )
+            : ListView(
+                padding: const EdgeInsets.all(12),
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.emoji_events_rounded, size: 16, color: Theme.of(context).colorScheme.outline),
+                      const SizedBox(width: 6),
+                      Text(
+                        'อันดับกิจกรรมสาขา · 7 วันล่าสุด',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.outline,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  for (var i = 0; i < entries.length; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _LeaderboardCard(
+                        rank: i + 1,
+                        entry: entries[i],
+                        isMine: entries[i].branchId == myBranchId,
+                        rankColor: i < _rankColors.length ? _rankColors[i] : Colors.grey,
+                      ),
+                    ),
+                ],
               ),
-          ],
-        ),
+      ),
+    );
+  }
+}
+
+class _LeaderboardCard extends StatelessWidget {
+  const _LeaderboardCard({required this.rank, required this.entry, required this.isMine, required this.rankColor});
+  final int rank;
+  final LeaderboardEntryDto entry;
+  final bool isMine;
+  final Color rankColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final outline = Theme.of(context).colorScheme.outline;
+    final isTopThree = rank <= 3;
+    const mine = Color(0xFFEC1968);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isMine ? mine.withAlpha(14) : Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.withAlpha(45)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: rankColor.withAlpha(isTopThree ? 255 : 40), shape: BoxShape.circle),
+            child: isTopThree
+                ? const Icon(Icons.emoji_events_rounded, color: Colors.white, size: 20)
+                : Text('$rank', style: TextStyle(fontWeight: FontWeight.bold, color: rankColor)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        entry.branchName,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                    ),
+                    if (isMine) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(color: mine.withAlpha(30), borderRadius: BorderRadius.circular(6)),
+                        child: const Text(
+                          'สาขาคุณ',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: mine),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.storefront_outlined, size: 13, color: outline),
+                        const SizedBox(width: 3),
+                        Text('เยี่ยม ${entry.prospectsVisited} ร้าน', style: TextStyle(fontSize: 12, color: outline)),
+                      ],
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.phone_in_talk_outlined, size: 13, color: outline),
+                        const SizedBox(width: 3),
+                        Text('ติดต่อ ${entry.prospectsContacted} ร้าน', style: TextStyle(fontSize: 12, color: outline)),
+                      ],
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.call_outlined, size: 13, color: outline),
+                        const SizedBox(width: 3),
+                        Text('ติดต่อ Lead ${entry.leadsContacted} ราย', style: TextStyle(fontSize: 12, color: outline)),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('${entry.score}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              Text('คะแนน', style: TextStyle(fontSize: 11, color: outline)),
+            ],
+          ),
+        ],
       ),
     );
   }
