@@ -28,6 +28,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>ใช้กล้องสแกนบาร์โค้ดสินค้า</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>ใช้ตำแหน่งของคุณเพื่อค้นหาสาขาเงินเทอร์โบที่ใกล้ที่สุด</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

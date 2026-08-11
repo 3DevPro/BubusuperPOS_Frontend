@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../shared/formatters.dart';
 import '../auth/auth_provider.dart';
@@ -118,6 +120,10 @@ class _TurboHomeBody extends ConsumerWidget {
             error: (err, _) => _ErrorCard(message: '$err'),
             data: (policies) => _InsuranceSummaryCard(activeCount: policies.where((p) => p.status == 'active').length),
           ),
+          const SizedBox(height: 20),
+          const Text('สาขาใกล้ฉัน', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          const _NearbyBranchSection(),
           const SizedBox(height: 24),
         ],
       ),
@@ -392,5 +398,126 @@ class _InsuranceSummaryCard extends StatelessWidget {
         onTap: () => context.push('/turbo/insurance'),
       ),
     );
+  }
+}
+
+enum _NearbyBranchStatus { idle, loading, error, loaded }
+
+class _NearbyBranchSection extends ConsumerStatefulWidget {
+  const _NearbyBranchSection();
+
+  @override
+  ConsumerState<_NearbyBranchSection> createState() => _NearbyBranchSectionState();
+}
+
+class _NearbyBranchSectionState extends ConsumerState<_NearbyBranchSection> {
+  _NearbyBranchStatus _status = _NearbyBranchStatus.idle;
+  List<NearbyBranchDto> _branches = [];
+  String? _error;
+
+  Future<Position> _getPosition() async {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      throw Exception('กรุณาเปิดบริการตำแหน่งของเครื่อง');
+    }
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+      throw Exception('ไม่ได้รับอนุญาตให้เข้าถึงตำแหน่ง');
+    }
+    return Geolocator.getCurrentPosition();
+  }
+
+  Future<void> _findNearby() async {
+    setState(() {
+      _status = _NearbyBranchStatus.loading;
+      _error = null;
+    });
+    try {
+      final position = await _getPosition();
+      final branches = await ref
+          .read(turboRepositoryProvider)
+          .nearbyBranches(position.latitude, position.longitude);
+      if (!mounted) return;
+      setState(() {
+        _branches = branches;
+        _status = _NearbyBranchStatus.loaded;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = '$e';
+        _status = _NearbyBranchStatus.error;
+      });
+    }
+  }
+
+  Future<void> _openInMaps(NearbyBranchDto branch) async {
+    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=${branch.lat},${branch.lng}');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    switch (_status) {
+      case _NearbyBranchStatus.idle:
+        return Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Icon(Icons.location_on_outlined, color: Theme.of(context).colorScheme.outline),
+                const SizedBox(width: 12),
+                const Expanded(child: Text('หาสาขาเงินเทอร์โบที่ใกล้คุณที่สุด')),
+                FilledButton(onPressed: _findNearby, child: const Text('หาสาขาใกล้ฉัน')),
+              ],
+            ),
+          ),
+        );
+      case _NearbyBranchStatus.loading:
+        return const _LoadingCard();
+      case _NearbyBranchStatus.error:
+        return Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_error ?? 'เกิดข้อผิดพลาด', style: const TextStyle(fontSize: 13)),
+                const SizedBox(height: 8),
+                OutlinedButton(onPressed: _findNearby, child: const Text('ลองอีกครั้ง')),
+              ],
+            ),
+          ),
+        );
+      case _NearbyBranchStatus.loaded:
+        if (_branches.isEmpty) {
+          return const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('ไม่พบสาขาใกล้คุณ', style: TextStyle(fontSize: 13)),
+            ),
+          );
+        }
+        return Column(
+          children: [
+            for (final branch in _branches)
+              Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: ListTile(
+                  leading: const Icon(Icons.store_mall_directory_outlined, color: Color(0xFFE5007D)),
+                  title: Text(branch.name),
+                  subtitle: Text('${branch.province} · ${branch.distanceKm.toStringAsFixed(1)} กม.'),
+                  trailing: const Icon(Icons.directions_outlined),
+                  onTap: () => _openInMaps(branch),
+                ),
+              ),
+          ],
+        );
+    }
   }
 }

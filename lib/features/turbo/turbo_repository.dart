@@ -476,6 +476,36 @@ class CreditStandingDto {
   );
 }
 
+class NearbyBranchDto {
+  NearbyBranchDto({
+    required this.id,
+    required this.code,
+    required this.name,
+    required this.province,
+    required this.lat,
+    required this.lng,
+    required this.distanceKm,
+  });
+
+  final String id;
+  final String code;
+  final String name;
+  final String province;
+  final Decimal lat;
+  final Decimal lng;
+  final double distanceKm;
+
+  factory NearbyBranchDto.fromJson(Map<String, dynamic> json) => NearbyBranchDto(
+    id: json['id'] as String,
+    code: json['code'] as String,
+    name: json['name'] as String,
+    province: json['province'] as String,
+    lat: Decimal.parse(json['lat'] as String),
+    lng: Decimal.parse(json['lng'] as String),
+    distanceKm: (json['distance_km'] as num).toDouble(),
+  );
+}
+
 class TurboRepository {
   TurboRepository(this._apiClient);
   final ApiClient _apiClient;
@@ -636,6 +666,14 @@ class TurboRepository {
   Future<CreditStandingDto> creditStanding() async {
     final resp = await _apiClient.dio.get('/api/v1/turbo/credit-standing');
     return CreditStandingDto.fromJson(resp.data as Map<String, dynamic>);
+  }
+
+  Future<List<NearbyBranchDto>> nearbyBranches(double lat, double lng) async {
+    final resp = await _apiClient.dio.get(
+      '/api/v1/turbo/branch/nearby',
+      queryParameters: {'lat': lat, 'lng': lng},
+    );
+    return (resp.data as List).map((e) => NearbyBranchDto.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   String _isoDate(DateTime d) =>
