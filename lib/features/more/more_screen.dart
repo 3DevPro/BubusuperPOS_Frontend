@@ -27,6 +27,8 @@ class MoreScreen extends ConsumerWidget {
                 leading: const Icon(Icons.person),
                 title: Text(me['name'] as String),
                 subtitle: Text('บทบาท: ${me['role']}'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/profile'),
               ),
             ),
           const SizedBox(height: 8),

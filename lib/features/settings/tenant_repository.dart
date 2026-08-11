@@ -5,6 +5,7 @@ import '../../core/api_client.dart';
 class TenantSettingsDto {
   TenantSettingsDto({
     required this.name,
+    required this.businessType,
     required this.currency,
     required this.timezone,
     required this.promptpayId,
@@ -17,6 +18,7 @@ class TenantSettingsDto {
   });
 
   final String name;
+  final String? businessType;
   final String currency;
   final String timezone;
   final String? promptpayId;
@@ -29,6 +31,7 @@ class TenantSettingsDto {
 
   factory TenantSettingsDto.fromJson(Map<String, dynamic> json) => TenantSettingsDto(
     name: json['name'] as String,
+    businessType: json['business_type'] as String?,
     currency: json['currency'] as String,
     timezone: json['timezone'] as String,
     promptpayId: json['promptpay_id'] as String?,

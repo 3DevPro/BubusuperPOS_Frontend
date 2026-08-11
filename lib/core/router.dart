@@ -25,6 +25,7 @@ import '../features/inventory/low_stock_screen.dart';
 import '../features/inventory/stock_adjust_screen.dart';
 import '../features/dashboard/daily_dashboard_screen.dart';
 import '../features/more/more_screen.dart';
+import '../features/more/profile_screen.dart';
 import '../features/pos/checkout_screen.dart';
 import '../features/pos/pos_screen.dart';
 import '../features/pos/receipt_screen.dart';
@@ -173,6 +174,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/low-stock', builder: (context, state) => const LowStockScreen()),
       GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
+      GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
       GoRoute(path: '/staff', builder: (context, state) => const StaffScreen()),
       GoRoute(path: '/categories', builder: (context, state) => const CategoryManagementScreen()),
       GoRoute(path: '/audit-log', builder: (context, state) => const AuditLogScreen()),
