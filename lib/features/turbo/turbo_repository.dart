@@ -678,6 +678,10 @@ class TurboRepository {
     return DailyCloseDto.fromJson(resp.data as Map<String, dynamic>);
   }
 
+  Future<void> reopenDay(DateTime businessDate) async {
+    await _apiClient.dio.delete('/api/v1/turbo/daily-close/${_isoDate(businessDate)}');
+  }
+
   Future<List<DailyCloseDto>> listCloses({int days = 30}) async {
     final resp = await _apiClient.dio.get('/api/v1/turbo/daily-close', queryParameters: {'days': days});
     return (resp.data as List).map((e) => DailyCloseDto.fromJson(e as Map<String, dynamic>)).toList();

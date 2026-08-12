@@ -317,58 +317,82 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           ],
         ),
         const SizedBox(height: 12),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _imageUrlController,
-                decoration: const InputDecoration(labelText: 'ลิงก์รูปสินค้า', border: OutlineInputBorder()),
-                onChanged: (_) => setState(() {}),
-              ),
-            ),
-            const SizedBox(width: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: InkWell(
-                onTap: _uploadingImage ? null : _pickAndUploadImage,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    _imageUrlController.text.trim().isEmpty
-                        ? Container(
-                            width: 48,
-                            height: 48,
-                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                            child: const Icon(Icons.image_outlined, size: 20),
-                          )
-                        : Image.network(
-                            _imageUrlController.text.trim(),
-                            width: 48,
-                            height: 48,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => Container(
-                              width: 48,
-                              height: 48,
-                              color: Theme.of(context).colorScheme.errorContainer,
-                              child: const Icon(Icons.broken_image_outlined, size: 20),
-                            ),
+        Text(
+          'รูปสินค้า (ตัวอย่างนี้คือหน้าตาจริงตอนแสดงในหน้าขาย)',
+          style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 12),
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            onTap: _uploadingImage ? null : _pickAndUploadImage,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Same size/fit as the POS product card (see pos_screen.dart's
+                // _ProductCard) — BoxFit.contain, not cover, so this preview
+                // is a truthful WYSIWYG of what shows on the sales screen,
+                // not just a distinct crop of it.
+                _imageUrlController.text.trim().isEmpty
+                    ? Container(
+                        width: double.infinity,
+                        height: 160,
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        child: const Icon(Icons.add_photo_alternate_outlined, size: 36),
+                      )
+                    : Container(
+                        width: double.infinity,
+                        height: 160,
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        child: Image.network(
+                          _imageUrlController.text.trim(),
+                          width: double.infinity,
+                          height: 160,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            width: double.infinity,
+                            height: 160,
+                            color: Theme.of(context).colorScheme.errorContainer,
+                            child: const Icon(Icons.broken_image_outlined, size: 28),
                           ),
-                    if (_uploadingImage)
-                      Container(
-                        width: 48,
-                        height: 48,
-                        color: Colors.black.withAlpha(120),
-                        child: const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         ),
                       ),
-                  ],
-                ),
-              ),
+                if (_uploadingImage)
+                  Container(
+                    width: double.infinity,
+                    height: 160,
+                    color: Colors.black.withAlpha(120),
+                    child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  ),
+                if (!_uploadingImage)
+                  Positioned(
+                    right: 8,
+                    bottom: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withAlpha(150),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.camera_alt, size: 14, color: Colors.white),
+                          SizedBox(width: 4),
+                          Text('แตะเพื่อเลือกรูป', style: TextStyle(color: Colors.white, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
             ),
-          ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _imageUrlController,
+          decoration: const InputDecoration(labelText: 'ลิงก์รูปสินค้า', border: OutlineInputBorder()),
+          onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 12),
         Row(

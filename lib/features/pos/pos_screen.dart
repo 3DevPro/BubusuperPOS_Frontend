@@ -200,13 +200,20 @@ class _ProductCard extends StatelessWidget {
           children: [
             if (imageUrl != null && imageUrl.isNotEmpty)
               Expanded(
-                child: Image.network(
-                  imageUrl,
+                child: Container(
                   width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    child: const Icon(Icons.image_not_supported_outlined),
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  // BoxFit.contain (not cover) so a photo shot in a different
+                  // aspect ratio than this card never gets cropped away —
+                  // seeing the whole product matters more than filling the tile.
+                  child: Image.network(
+                    imageUrl,
+                    width: double.infinity,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      child: const Icon(Icons.image_not_supported_outlined),
+                    ),
                   ),
                 ),
               ),

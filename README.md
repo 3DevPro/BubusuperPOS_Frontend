@@ -5,6 +5,22 @@ app extended with a "Turbo" layer (income certification, micro-insurance,
 branch/O2O) built for the TURBO Business Case Competition 2026 pitch
 (Ngernturbo).
 
+## Try it live
+
+**https://porkornrawee.site** — served as a Flutter web build (production,
+same backend as native builds). Works from any phone browser, no install
+needed. On iOS/Android, "Add to Home Screen" from the browser share menu
+gives it a home-screen icon and full-screen (no browser chrome) launch —
+the free alternative to a native install (see `manifest.json` /
+`web/index.html`'s `apple-mobile-web-app-capable` tag).
+
+A true native iOS install (App Store / TestFlight / sideload) needs a paid
+Apple Developer Program membership ($99/yr) or AltStore-style sideloading
+(free, but the signed app expires every 7 days without a re-sign) — there
+is no free, maintenance-free way to get a native, link-installable iOS
+build. Android has no such restriction — `flutter build apk --release`
+produces a directly-installable `.apk`, no account needed.
+
 Part of a 4-repo split: `BubusuperPOS_Backend` (POS API), `BubusuperPOS_Frontend`
 (this repo), `BubusuperPOS_chatbot` (AI assistant service), `BubusuperPOS_Infra`
 (Docker Compose / deploy). All four are expected to live as sibling

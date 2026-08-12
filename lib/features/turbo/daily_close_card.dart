@@ -46,7 +46,11 @@ class DailyCloseCard extends ConsumerWidget {
                 onShopClosed: () => _openReasonSheet(context, ref),
               );
             }
-            return _AlreadyClosed(close: close, onEdit: () => _openReasonSheet(context, ref, existing: close));
+            return _AlreadyClosed(
+              close: close,
+              onEdit: () => _openReasonSheet(context, ref, existing: close),
+              onReopen: () => _reopenNow(context, ref),
+            );
           },
         ),
       ),
@@ -61,6 +65,18 @@ class DailyCloseCard extends ConsumerWidget {
     } on DioException catch (e) {
       final data = e.response?.data;
       final message = (data is Map && data['detail'] != null) ? data['detail'].toString() : 'ปิดร้านไม่สำเร็จ';
+      messenger.showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  Future<void> _reopenNow(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(turboRepositoryProvider).reopenDay(DateTime.now());
+      ref.invalidate(todayCloseProvider);
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final message = (data is Map && data['detail'] != null) ? data['detail'].toString() : 'เปิดร้านไม่สำเร็จ';
       messenger.showSnackBar(SnackBar(content: Text(message)));
     }
   }
@@ -112,9 +128,10 @@ class _NotClosedYet extends StatelessWidget {
 }
 
 class _AlreadyClosed extends StatelessWidget {
-  const _AlreadyClosed({required this.close, required this.onEdit});
+  const _AlreadyClosed({required this.close, required this.onEdit, required this.onReopen});
   final DailyCloseDto close;
   final VoidCallback onEdit;
+  final VoidCallback onReopen;
 
   @override
   Widget build(BuildContext context) {
@@ -122,28 +139,41 @@ class _AlreadyClosed extends StatelessWidget {
     final color = isOpen ? const Color(0xFF66BB6A) : const Color(0xFFFFA726);
     final label = _reasonLabels[close.closedReason] ?? close.closedReason;
 
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(color: color.withAlpha(30), borderRadius: BorderRadius.circular(14)),
-          child: Icon(isOpen ? Icons.check_circle : Icons.storefront_outlined, color: color),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                isOpen ? 'ปิดยอดวันนี้แล้ว' : 'วันนี้ร้านปิด: $label',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: color.withAlpha(30), borderRadius: BorderRadius.circular(14)),
+              child: Icon(isOpen ? Icons.check_circle : Icons.storefront_outlined, color: color),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isOpen ? 'ปิดยอดวันนี้แล้ว' : 'วันนี้ร้านปิด: $label',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                  if (close.note != null && close.note!.isNotEmpty)
+                    Text(close.note!, style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 13)),
+                ],
               ),
-              if (close.note != null && close.note!.isNotEmpty)
-                Text(close.note!, style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 13)),
-            ],
+            ),
+            TextButton(onPressed: onEdit, child: const Text('แก้ไข')),
+          ],
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: onReopen,
+            icon: const Icon(Icons.undo, size: 18),
+            label: const Text('เปิดร้าน (ยกเลิกการปิด)'),
           ),
         ),
-        TextButton(onPressed: onEdit, child: const Text('แก้ไข')),
       ],
     );
   }

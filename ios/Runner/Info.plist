@@ -32,6 +32,18 @@
 	<string>ใช้เลือกรูปสินค้าจากคลังภาพ</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>ใช้ตำแหน่งของคุณเพื่อค้นหาสาขาเงินเทอร์โบที่ใกล้ที่สุด</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>ใช้เชื่อมต่อกับเซิร์ฟเวอร์ระหว่างการพัฒนา</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- Dev/test builds point API_BASE_URL at a plain-HTTP IP on the
+		     local network (e.g. --dart-define=API_BASE_URL=http://192.168.x.x:8000).
+		     NSAllowsLocalNetworking permits cleartext HTTP to RFC1918/.local
+		     addresses only — it does not weaken ATS for the public internet,
+		     unlike NSAllowsArbitraryLoads. -->
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

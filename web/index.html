@@ -22,6 +22,10 @@
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
+  <!-- Older iOS Safari only honors the apple-prefixed tag, not the generic
+       one above — without it, "Add to Home Screen" still works but opens
+       inside Safari's chrome instead of full-screen like a real app. -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="BubuSuperPOS">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
