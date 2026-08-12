@@ -12,6 +12,9 @@ class ProspectDto {
     required this.status,
     required this.applicationInterest,
     required this.contactStatus,
+    required this.contactStatusUpdatedAt,
+    required this.calledAt,
+    required this.metAt,
     required this.note,
     required this.lastVisitedAt,
     required this.createdAt,
@@ -25,6 +28,9 @@ class ProspectDto {
   final String status;
   final String applicationInterest;
   final String contactStatus;
+  final DateTime? contactStatusUpdatedAt;
+  final DateTime? calledAt;
+  final DateTime? metAt;
   final String? note;
   final DateTime? lastVisitedAt;
   final DateTime createdAt;
@@ -38,6 +44,11 @@ class ProspectDto {
     status: json['status'] as String,
     applicationInterest: json['application_interest'] as String,
     contactStatus: json['contact_status'] as String,
+    contactStatusUpdatedAt: json['contact_status_updated_at'] == null
+        ? null
+        : DateTime.parse(json['contact_status_updated_at'] as String),
+    calledAt: json['called_at'] == null ? null : DateTime.parse(json['called_at'] as String),
+    metAt: json['met_at'] == null ? null : DateTime.parse(json['met_at'] as String),
     note: json['note'] as String?,
     lastVisitedAt: json['last_visited_at'] == null ? null : DateTime.parse(json['last_visited_at'] as String),
     createdAt: DateTime.parse(json['created_at'] as String),
@@ -195,13 +206,15 @@ class BranchRepository {
     return (resp.data as List).map((e) => ProspectDto.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  // No contactStatus param — a prospect always starts not_scheduled server
+  // side (see ProspectCreateRequest's comment) so the leaderboard can't be
+  // gamed by backdating a call/visit at creation time.
   Future<ProspectDto> createProspect({
     required String name,
     String? businessType,
     String? address,
     String? phone,
     String applicationInterest = 'not_applied',
-    String contactStatus = 'not_scheduled',
   }) async {
     final resp = await _apiClient.dio.post(
       '/api/v1/turbo/branch/prospects',
@@ -211,7 +224,6 @@ class BranchRepository {
         if (address != null && address.isNotEmpty) 'address': address,
         if (phone != null && phone.isNotEmpty) 'phone': phone,
         'application_interest': applicationInterest,
-        'contact_status': contactStatus,
       },
     );
     return ProspectDto.fromJson(resp.data as Map<String, dynamic>);
@@ -229,6 +241,17 @@ class BranchRepository {
     final resp = await _apiClient.dio.post(
       '/api/v1/turbo/branch/prospects/$prospectId/contact-status',
       data: {'contact_status': contactStatus},
+    );
+    return ProspectDto.fromJson(resp.data as Map<String, dynamic>);
+  }
+
+  Future<ProspectDto> updateProspectApplicationInterest(
+    String prospectId, {
+    required String applicationInterest,
+  }) async {
+    final resp = await _apiClient.dio.post(
+      '/api/v1/turbo/branch/prospects/$prospectId/application-interest',
+      data: {'application_interest': applicationInterest},
     );
     return ProspectDto.fromJson(resp.data as Map<String, dynamic>);
   }

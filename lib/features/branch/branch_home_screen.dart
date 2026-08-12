@@ -404,7 +404,6 @@ class _AddProspectSheetState extends ConsumerState<_AddProspectSheet> {
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
   String _applicationInterest = 'not_applied';
-  String _contactStatus = 'not_scheduled';
   bool _submitting = false;
 
   @override
@@ -428,7 +427,6 @@ class _AddProspectSheetState extends ConsumerState<_AddProspectSheet> {
             phone: _phoneController.text.trim(),
             address: _addressController.text.trim(),
             applicationInterest: _applicationInterest,
-            contactStatus: _contactStatus,
           );
       ref.invalidate(prospectsProvider);
       if (mounted) Navigator.of(context).pop();
@@ -474,21 +472,6 @@ class _AddProspectSheetState extends ConsumerState<_AddProspectSheet> {
                   ),
               ],
             ),
-            const SizedBox(height: 16),
-            Text('สถานะการติดต่อล่าสุด', style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 12)),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final entry in _contactStatusLabels.entries)
-                  _choiceChip(
-                    label: entry.value,
-                    selected: _contactStatus == entry.key,
-                    onSelected: (_) => setState(() => _contactStatus = entry.key),
-                  ),
-              ],
-            ),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
@@ -517,6 +500,7 @@ class _VisitProspectSheet extends ConsumerStatefulWidget {
 class _VisitProspectSheetState extends ConsumerState<_VisitProspectSheet> {
   late final String _status = widget.prospect.status == 'not_visited' ? 'visited' : widget.prospect.status;
   late String _contactStatus = widget.prospect.contactStatus;
+  late String _applicationInterest = widget.prospect.applicationInterest;
   late final _noteController = TextEditingController(text: widget.prospect.note ?? '');
   bool _submitting = false;
   bool _deleting = false;
@@ -534,6 +518,7 @@ class _VisitProspectSheetState extends ConsumerState<_VisitProspectSheet> {
       await Future.wait([
         repo.visitProspect(widget.prospect.id, status: _status, note: _noteController.text.trim()),
         repo.updateProspectContactStatus(widget.prospect.id, contactStatus: _contactStatus),
+        repo.updateProspectApplicationInterest(widget.prospect.id, applicationInterest: _applicationInterest),
       ]);
       ref.invalidate(prospectsProvider);
       if (mounted) Navigator.of(context).pop();
@@ -617,10 +602,20 @@ class _VisitProspectSheetState extends ConsumerState<_VisitProspectSheet> {
               ].join(' · '),
               style: TextStyle(color: outline),
             ),
+            const SizedBox(height: 16),
+            Text('ประวัติการสมัครสินเชื่อ/ประกัน', style: TextStyle(color: outline, fontSize: 12)),
             const SizedBox(height: 6),
-            Text(
-              'ประวัติการสมัครสินเชื่อ/ประกัน: ${_applicationInterestLabels[p.applicationInterest] ?? p.applicationInterest}',
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final entry in _applicationInterestLabels.entries)
+                  _choiceChip(
+                    label: entry.value,
+                    selected: _applicationInterest == entry.key,
+                    onSelected: (_) => setState(() => _applicationInterest = entry.key),
+                  ),
+              ],
             ),
             const SizedBox(height: 20),
             const Text('สถานะการติดต่อ', style: TextStyle(color: Colors.black, fontSize: 12)),
@@ -637,6 +632,13 @@ class _VisitProspectSheetState extends ConsumerState<_VisitProspectSheet> {
                   ),
               ],
             ),
+            if (p.calledAt != null || p.metAt != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                'ติดต่อล่าสุด: ${formatThaiDateTime([p.calledAt, p.metAt].whereType<DateTime>().reduce((a, b) => a.isAfter(b) ? a : b))}',
+                style: TextStyle(color: outline, fontSize: 11),
+              ),
+            ],
             const SizedBox(height: 18),
             TextField(controller: _noteController, decoration: const InputDecoration(labelText: 'บันทึกการติดต่อ')),
             const SizedBox(height: 20),
