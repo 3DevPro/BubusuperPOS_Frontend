@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,26 +9,144 @@ import '../auth/auth_provider.dart';
 import 'branch_providers.dart';
 import 'branch_repository.dart';
 
-const _prospectStatusLabels = {
-  'not_visited': 'ยังไม่ได้เยี่ยม',
-  'visited': 'เยี่ยมแล้ว',
-  'converted': 'สมัครแล้ว',
-  'not_interested': 'ไม่สนใจ',
-};
 const _leadStatusLabels = {'new': 'ใหม่', 'contacted': 'ติดต่อแล้ว', 'converted': 'ปิดได้แล้ว', 'lost': 'ไม่สำเร็จ'};
-const _leadSourceLabels = {
-  'o2o_web': 'จากเว็บ O2O',
-  'visit': 'จากการเยี่ยม',
-  'referral': 'แนะนำ',
-  'in_app': 'จากในแอป',
-};
 const _collateralKindLabels = {
   'motorcycle': 'มอเตอร์ไซค์',
   'car': 'รถยนต์',
   'tractor': 'แทรกเตอร์',
   'land_title': 'โฉนดที่ดิน',
 };
+const _applicationInterestLabels = {
+  'not_applied': 'ไม่เคยสมัคร',
+  'applied_loan': 'สินเชื่อ',
+  'applied_insurance': 'ประกัน',
+  'applied_both': 'ทั้งสองอย่าง',
+};
+const _contactStatusLabels = {
+  'unreachable': 'ติดต่อไม่ได้',
+  'not_scheduled': 'ยังไม่ได้นัดพบ',
+  'called': 'โทรแล้ว',
+  'met': 'นัดพบแล้ว',
+};
+const _leadProductInterestLabels = {'loan': 'สินเชื่อ', 'insurance': 'ประกัน'};
 const _slaTarget = Duration(minutes: 15);
+
+// A Lead's loan- and insurance-quote fields are mutually exclusive (see
+// Lead.quoted_loan_amount's comment in the backend model) so which one is
+// non-null is enough to tell what the lead is interested in.
+String? _leadProductInterest(LeadDto lead) {
+  if (lead.quotedLoanAmount != null) return 'loan';
+  if (lead.quotedDailyBenefit != null || lead.quotedPremium != null) return 'insurance';
+  return null;
+}
+
+String _errorMessage(Object e) {
+  return e is DioException ? (e.response?.data?['detail'] as String? ?? e.message ?? '$e') : '$e';
+}
+
+Widget _filterDropdown<T>(
+  BuildContext context, {
+  required T? value,
+  required List<DropdownMenuItem<T?>> items,
+  required ValueChanged<T?> onChanged,
+}) {
+  return DropdownButtonFormField<T?>(
+    initialValue: value,
+    isExpanded: true,
+    decoration: InputDecoration(
+      isDense: true,
+      filled: true,
+      fillColor: Theme.of(context).colorScheme.surface,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    ),
+    items: items,
+    onChanged: onChanged,
+  );
+}
+
+// Shared by the Prospects and Leads tabs — a search field followed by a row
+// of filter dropdowns in a shaded container. Callers own the dropdowns'
+// options/state; this only owns the shared layout/styling.
+class _SearchAndFilterBar extends StatelessWidget {
+  const _SearchAndFilterBar({
+    required this.searchController,
+    required this.hintText,
+    required this.query,
+    required this.onQueryChanged,
+    required this.onClear,
+    required this.filters,
+    this.topPadding = 12,
+  });
+
+  final TextEditingController searchController;
+  final String hintText;
+  final String query;
+  final ValueChanged<String> onQueryChanged;
+  final VoidCallback onClear;
+  final List<Widget> filters;
+  final double topPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(12, topPadding, 12, 0),
+          child: TextField(
+            controller: searchController,
+            decoration: InputDecoration(
+              hintText: hintText,
+              prefixIcon: const Icon(Icons.search),
+              isDense: true,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              suffixIcon: query.isEmpty ? null : IconButton(icon: const Icon(Icons.clear), onPressed: onClear),
+            ),
+            onChanged: onQueryChanged,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(100),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                for (var i = 0; i < filters.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 10),
+                  Expanded(child: filters[i]),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// A blue picked to read clearly as "selected" against the brand pink
+// (0xFFEC1968) used elsewhere on these cards/badges — anything reddish would
+// blend in, so selection state needed its own hue.
+const _chipSelectedColor = Color(0xFF2F80ED);
+
+Widget _choiceChip({required String label, required bool selected, required ValueChanged<bool> onSelected}) {
+  return ChoiceChip(
+    label: Text(label),
+    selected: selected,
+    onSelected: onSelected,
+    showCheckmark: false,
+    selectedColor: _chipSelectedColor.withAlpha(38),
+    labelStyle: TextStyle(
+      color: selected ? _chipSelectedColor : null,
+      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+    ),
+    side: BorderSide(color: selected ? _chipSelectedColor.withAlpha(130) : Colors.grey.withAlpha(60)),
+  );
+}
 
 class BranchHomeScreen extends ConsumerWidget {
   const BranchHomeScreen({super.key});
@@ -64,38 +183,111 @@ class BranchHomeScreen extends ConsumerWidget {
 
 // ── Prospects (Morning Route) ──
 
-class _ProspectsTab extends ConsumerWidget {
+class _ProspectsTab extends ConsumerStatefulWidget {
   const _ProspectsTab();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ProspectsTab> createState() => _ProspectsTabState();
+}
+
+class _ProspectsTabState extends ConsumerState<_ProspectsTab> {
+  final _searchController = TextEditingController();
+  String _query = '';
+  String? _typeFilter;
+  String? _contactFilter;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<ProspectDto> _filtered(List<ProspectDto> prospects) {
+    return prospects.where((p) {
+      if (_typeFilter != null && p.businessType != _typeFilter) return false;
+      if (_contactFilter != null && p.contactStatus != _contactFilter) return false;
+      if (_query.isEmpty) return true;
+      return p.name.toLowerCase().contains(_query.toLowerCase());
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final prospectsAsync = ref.watch(prospectsProvider);
 
     return Scaffold(
       body: prospectsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => Center(child: Text('โหลดไม่สำเร็จ: $err')),
-        data: (prospects) => RefreshIndicator(
-          onRefresh: () async => ref.invalidate(prospectsProvider),
-          child: prospects.isEmpty
-              ? ListView(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Text(
-                        'ยังไม่มีรายชื่อผู้ค้าในรัศมี กดปุ่ม + เพื่อเพิ่ม',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Theme.of(context).colorScheme.outline),
-                      ),
+        data: (prospects) {
+          final types = prospects.map((p) => p.businessType).whereType<String>().toSet().toList()..sort();
+          // The selected type can vanish out from under the filter (its last
+          // matching prospect gets deleted/retyped) — clear it rather than
+          // handing DropdownButtonFormField a value absent from its items.
+          if (_typeFilter != null && !types.contains(_typeFilter)) {
+            _typeFilter = null;
+          }
+          final filtered = _filtered(prospects);
+
+          return RefreshIndicator(
+            onRefresh: () async => ref.invalidate(prospectsProvider),
+            child: Column(
+              children: [
+                _SearchAndFilterBar(
+                  searchController: _searchController,
+                  hintText: 'ค้นหาชื่อร้าน',
+                  query: _query,
+                  onQueryChanged: (v) => setState(() => _query = v),
+                  onClear: () => setState(() {
+                    _searchController.clear();
+                    _query = '';
+                  }),
+                  filters: [
+                    _filterDropdown<String>(
+                      context,
+                      value: _typeFilter,
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('ทุกประเภทร้าน')),
+                        for (final type in types) DropdownMenuItem(value: type, child: Text(type)),
+                      ],
+                      onChanged: (v) => setState(() => _typeFilter = v),
+                    ),
+                    _filterDropdown<String>(
+                      context,
+                      value: _contactFilter,
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('ทุกสถานะการติดต่อ')),
+                        for (final entry in _contactStatusLabels.entries)
+                          DropdownMenuItem(value: entry.key, child: Text(entry.value)),
+                      ],
+                      onChanged: (v) => setState(() => _contactFilter = v),
                     ),
                   ],
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: prospects.length,
-                  itemBuilder: (context, i) => _ProspectCard(prospect: prospects[i]),
                 ),
-        ),
+                Expanded(
+                  child: filtered.isEmpty
+                      ? ListView(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(32),
+                              child: Text(
+                                prospects.isEmpty ? 'ยังไม่มีรายชื่อผู้ค้าในรัศมี กดปุ่ม + เพื่อเพิ่ม' : 'ไม่พบผู้ค้าที่ตรงกับการค้นหา',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Theme.of(context).colorScheme.outline),
+                              ),
+                            ),
+                          ],
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(12),
+                          itemCount: filtered.length,
+                          itemBuilder: (context, i) => _ProspectCard(prospect: filtered[i]),
+                        ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => showModalBottomSheet(
@@ -115,43 +307,84 @@ class _ProspectCard extends ConsumerWidget {
   final ProspectDto prospect;
 
   Color _statusColor() {
-    switch (prospect.status) {
-      case 'visited':
+    switch (prospect.contactStatus) {
+      case 'called':
         return const Color(0xFF42A5F5);
-      case 'converted':
+      case 'met':
         return const Color(0xFF66BB6A);
-      case 'not_interested':
+      case 'unreachable':
         return Colors.grey;
       default:
         return const Color(0xFFFFA726);
     }
   }
 
+  Widget _badge(String label, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(color: color.withAlpha(30), borderRadius: BorderRadius.circular(10)),
+    child: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11)),
+  );
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final color = _statusColor();
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        title: Text(prospect.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text([
-          if (prospect.businessType != null) prospect.businessType!,
-          if (prospect.phone != null) prospect.phone!,
-          if (prospect.note != null && prospect.note!.isNotEmpty) prospect.note!,
-        ].join(' · ')),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(color: color.withAlpha(30), borderRadius: BorderRadius.circular(10)),
-          child: Text(
-            _prospectStatusLabels[prospect.status] ?? prospect.status,
-            style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11),
-          ),
-        ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
         onTap: () => showModalBottomSheet(
           context: context,
           isScrollControlled: true,
           shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
           builder: (context) => _VisitProspectSheet(prospect: prospect),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(prospect.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text([
+                      if (prospect.businessType != null) prospect.businessType!,
+                      if (prospect.phone != null) prospect.phone!,
+                      if (prospect.note != null && prospect.note!.isNotEmpty) prospect.note!,
+                    ].join(' · ')),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        Text(
+                          'ประวัติการสมัครสินเชื่อ/ประกัน:',
+                          style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.outline),
+                        ),
+                        _badge(
+                          _applicationInterestLabels[prospect.applicationInterest] ?? prospect.applicationInterest,
+                          const Color(0xFFEC1968),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: color.withAlpha(30), borderRadius: BorderRadius.circular(10)),
+                child: Text(
+                  _contactStatusLabels[prospect.contactStatus] ?? prospect.contactStatus,
+                  style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -169,6 +402,8 @@ class _AddProspectSheetState extends ConsumerState<_AddProspectSheet> {
   final _nameController = TextEditingController();
   final _typeController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _addressController = TextEditingController();
+  String _applicationInterest = 'not_applied';
   bool _submitting = false;
 
   @override
@@ -176,6 +411,7 @@ class _AddProspectSheetState extends ConsumerState<_AddProspectSheet> {
     _nameController.dispose();
     _typeController.dispose();
     _phoneController.dispose();
+    _addressController.dispose();
     super.dispose();
   }
 
@@ -189,6 +425,8 @@ class _AddProspectSheetState extends ConsumerState<_AddProspectSheet> {
             name: _nameController.text.trim(),
             businessType: _typeController.text.trim(),
             phone: _phoneController.text.trim(),
+            address: _addressController.text.trim(),
+            applicationInterest: _applicationInterest,
           );
       ref.invalidate(prospectsProvider);
       if (mounted) Navigator.of(context).pop();
@@ -201,32 +439,51 @@ class _AddProspectSheetState extends ConsumerState<_AddProspectSheet> {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: MediaQuery.of(context).viewInsets.bottom + 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('เพิ่มผู้ค้าในรัศมี', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
-          TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'ชื่อร้าน/ผู้ค้า')),
-          const SizedBox(height: 12),
-          TextField(controller: _typeController, decoration: const InputDecoration(labelText: 'ประเภทร้าน (ถ้ามี)')),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _phoneController,
-            decoration: const InputDecoration(labelText: 'เบอร์โทร (ถ้ามี)'),
-            keyboardType: TextInputType.phone,
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: _submitting ? null : _submit,
-              child: _submitting
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('บันทึก'),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('เพิ่มผู้ค้า', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'ชื่อร้าน/ผู้ค้า')),
+            const SizedBox(height: 12),
+            TextField(controller: _typeController, decoration: const InputDecoration(labelText: 'ประเภทร้าน')),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _phoneController,
+              decoration: const InputDecoration(labelText: 'เบอร์โทรศัพท์'),
+              keyboardType: TextInputType.phone,
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            TextField(controller: _addressController, decoration: const InputDecoration(labelText: 'พื้นที่ / จังหวัด')),
+            const SizedBox(height: 16),
+            Text('ประวัติการสมัครสินเชื่อ/ประกัน', style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 12)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final entry in _applicationInterestLabels.entries)
+                  _choiceChip(
+                    label: entry.value,
+                    selected: _applicationInterest == entry.key,
+                    onSelected: (_) => setState(() => _applicationInterest = entry.key),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _submitting ? null : _submit,
+                child: _submitting
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('บันทึก'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -241,9 +498,12 @@ class _VisitProspectSheet extends ConsumerStatefulWidget {
 }
 
 class _VisitProspectSheetState extends ConsumerState<_VisitProspectSheet> {
-  late String _status = widget.prospect.status == 'not_visited' ? 'visited' : widget.prospect.status;
+  late final String _status = widget.prospect.status == 'not_visited' ? 'visited' : widget.prospect.status;
+  late String _contactStatus = widget.prospect.contactStatus;
+  late String _applicationInterest = widget.prospect.applicationInterest;
   late final _noteController = TextEditingController(text: widget.prospect.note ?? '');
   bool _submitting = false;
+  bool _deleting = false;
 
   @override
   void dispose() {
@@ -254,51 +514,145 @@ class _VisitProspectSheetState extends ConsumerState<_VisitProspectSheet> {
   Future<void> _submit() async {
     setState(() => _submitting = true);
     try {
-      await ref
-          .read(branchRepositoryProvider)
-          .visitProspect(widget.prospect.id, status: _status, note: _noteController.text.trim());
+      final repo = ref.read(branchRepositoryProvider);
+      await Future.wait([
+        repo.visitProspect(widget.prospect.id, status: _status, note: _noteController.text.trim()),
+        repo.updateProspectContactStatus(widget.prospect.id, contactStatus: _contactStatus),
+        repo.updateProspectApplicationInterest(widget.prospect.id, applicationInterest: _applicationInterest),
+      ]);
       ref.invalidate(prospectsProvider);
       if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      // Both calls run concurrently — either can fail independently, so on
+      // any failure we still invalidate to pull whatever partial state the
+      // server ended up with, rather than leaving the UI showing stale data.
+      ref.invalidate(prospectsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('บันทึกไม่สำเร็จ: ${_errorMessage(e)}')));
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: MediaQuery.of(context).viewInsets.bottom + 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(widget.prospect.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final status in ['visited', 'converted', 'not_interested'])
-                ChoiceChip(
-                  label: Text(_prospectStatusLabels[status]!),
-                  selected: _status == status,
-                  onSelected: (_) => setState(() => _status = status),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          TextField(controller: _noteController, decoration: const InputDecoration(labelText: 'บันทึกการเยี่ยม')),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: _submitting ? null : _submit,
-              child: _submitting
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('บันทึกผลการเยี่ยม'),
-            ),
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ลบร้านค้านี้?'),
+        content: Text('ต้องการลบ "${widget.prospect.name}" ใช่หรือไม่ การลบไม่สามารถย้อนกลับได้'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('ยกเลิก')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('ลบ'),
           ),
         ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _deleting = true);
+    try {
+      await ref.read(branchRepositoryProvider).deleteProspect(widget.prospect.id);
+      ref.invalidate(prospectsProvider);
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('ลบไม่สำเร็จ: ${_errorMessage(e)}')));
+      }
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final outline = Theme.of(context).colorScheme.outline;
+    final p = widget.prospect;
+    return Padding(
+      padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: MediaQuery.of(context).viewInsets.bottom + 20),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(child: Text(p.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+                _deleting
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                      )
+                    : IconButton(
+                        icon: const Icon(Icons.delete_outline, color: Colors.red),
+                        tooltip: 'ลบร้านค้า',
+                        onPressed: _confirmDelete,
+                      ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              [
+                if (p.businessType != null && p.businessType!.isNotEmpty) p.businessType!,
+                if (p.phone != null && p.phone!.isNotEmpty) p.phone!,
+                if (p.address != null && p.address!.isNotEmpty) p.address!,
+              ].join(' · '),
+              style: TextStyle(color: outline),
+            ),
+            const SizedBox(height: 16),
+            Text('ประวัติการสมัครสินเชื่อ/ประกัน', style: TextStyle(color: outline, fontSize: 12)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final entry in _applicationInterestLabels.entries)
+                  _choiceChip(
+                    label: entry.value,
+                    selected: _applicationInterest == entry.key,
+                    onSelected: (_) => setState(() => _applicationInterest = entry.key),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            const Text('สถานะการติดต่อ', style: TextStyle(color: Colors.black, fontSize: 12)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final entry in _contactStatusLabels.entries)
+                  _choiceChip(
+                    label: entry.value,
+                    selected: _contactStatus == entry.key,
+                    onSelected: (_) => setState(() => _contactStatus = entry.key),
+                  ),
+              ],
+            ),
+            if (p.calledAt != null || p.metAt != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                'ติดต่อล่าสุด: ${formatThaiDateTime([p.calledAt, p.metAt].whereType<DateTime>().reduce((a, b) => a.isAfter(b) ? a : b))}',
+                style: TextStyle(color: outline, fontSize: 11),
+              ),
+            ],
+            const SizedBox(height: 18),
+            TextField(controller: _noteController, decoration: const InputDecoration(labelText: 'บันทึกการติดต่อ')),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _submitting ? null : _submit,
+                child: _submitting
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('บันทึกการติดต่อ'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -306,37 +660,167 @@ class _VisitProspectSheetState extends ConsumerState<_VisitProspectSheet> {
 
 // ── Leads ──
 
-class _LeadsTab extends ConsumerWidget {
+class _LeadsTab extends ConsumerStatefulWidget {
   const _LeadsTab();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_LeadsTab> createState() => _LeadsTabState();
+}
+
+class _LeadsTabState extends ConsumerState<_LeadsTab> {
+  final _searchController = TextEditingController();
+  String _query = '';
+  String? _statusFilter;
+  String? _interestFilter;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<LeadDto> _filtered(List<LeadDto> leads) {
+    return leads.where((l) {
+      if (_statusFilter != null && l.status != _statusFilter) return false;
+      if (_interestFilter != null && _leadProductInterest(l) != _interestFilter) return false;
+      if (_query.isEmpty) return true;
+      return l.name.toLowerCase().contains(_query.toLowerCase());
+    }).toList();
+  }
+
+  Widget _statCard(String label, int count, Color color, IconData icon) {
+    return Card(
+      color: color.withAlpha(18),
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: color.withAlpha(35), shape: BoxShape.circle),
+              child: Icon(icon, color: color, size: 18),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('$count', style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 20)),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final leadsAsync = ref.watch(leadsProvider);
 
     return leadsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => Center(child: Text('โหลดไม่สำเร็จ: $err')),
-      data: (leads) => RefreshIndicator(
-        onRefresh: () async => ref.invalidate(leadsProvider),
-        child: leads.isEmpty
-            ? ListView(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Text(
-                      'ยังไม่มี Lead เข้ามา',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Theme.of(context).colorScheme.outline),
-                    ),
+      data: (leads) {
+        final filtered = _filtered(leads);
+        final contacted = leads.where((l) => l.status == 'contacted').length;
+        final lost = leads.where((l) => l.status == 'lost').length;
+        final converted = leads.where((l) => l.status == 'converted').length;
+
+        return RefreshIndicator(
+          onRefresh: () async => ref.invalidate(leadsProvider),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final columns = constraints.maxWidth >= 700 ? 4 : 2;
+                    return GridView.count(
+                      crossAxisCount: columns,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: columns == 4 ? 2.8 : 2.4,
+                      children: [
+                        _statCard('Lead ทั้งหมด', leads.length, const Color(0xFF2F80ED), Icons.list_alt_rounded),
+                        _statCard('ติดต่อแล้ว', contacted, const Color(0xFFFFA726), Icons.call_rounded),
+                        _statCard('ไม่สำเร็จ', lost, Colors.grey, Icons.close_rounded),
+                        _statCard('ปิดได้แล้ว', converted, const Color(0xFF66BB6A), Icons.check_circle_rounded),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              _SearchAndFilterBar(
+                searchController: _searchController,
+                hintText: 'ค้นหาชื่อร้าน',
+                query: _query,
+                onQueryChanged: (v) => setState(() => _query = v),
+                onClear: () => setState(() {
+                  _searchController.clear();
+                  _query = '';
+                }),
+                topPadding: 18,
+                filters: [
+                  _filterDropdown<String>(
+                    context,
+                    value: _statusFilter,
+                    items: const [
+                      DropdownMenuItem(value: null, child: Text('ทุกสถานะ')),
+                      DropdownMenuItem(value: 'contacted', child: Text('ติดต่อแล้ว')),
+                      DropdownMenuItem(value: 'lost', child: Text('ไม่สำเร็จ')),
+                      DropdownMenuItem(value: 'converted', child: Text('ปิดได้แล้ว')),
+                    ],
+                    onChanged: (v) => setState(() => _statusFilter = v),
+                  ),
+                  _filterDropdown<String>(
+                    context,
+                    value: _interestFilter,
+                    items: const [
+                      DropdownMenuItem(value: null, child: Text('ทุกผลิตภัณฑ์')),
+                      DropdownMenuItem(value: 'loan', child: Text('สินเชื่อ')),
+                      DropdownMenuItem(value: 'insurance', child: Text('ประกัน')),
+                    ],
+                    onChanged: (v) => setState(() => _interestFilter = v),
                   ),
                 ],
-              )
-            : ListView.builder(
-                padding: const EdgeInsets.all(12),
-                itemCount: leads.length,
-                itemBuilder: (context, i) => _LeadCard(lead: leads[i]),
               ),
-      ),
+              Expanded(
+                child: filtered.isEmpty
+                    ? ListView(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(32),
+                            child: Text(
+                              leads.isEmpty ? 'ยังไม่มี Lead เข้ามา' : 'ไม่พบ Lead ที่ตรงกับการค้นหา',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Theme.of(context).colorScheme.outline),
+                            ),
+                          ),
+                        ],
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: filtered.length,
+                        itemBuilder: (context, i) => _LeadCard(lead: filtered[i]),
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -347,6 +831,7 @@ class _LeadCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final outline = Theme.of(context).colorScheme.outline;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
@@ -361,13 +846,19 @@ class _LeadCard extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(lead.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      const SizedBox(height: 2),
+                      if (lead.occupation != null || lead.age != null)
+                        Text(
+                          [
+                            if (lead.occupation != null) lead.occupation!,
+                            if (lead.age != null) 'อายุ ${lead.age}',
+                          ].join(' · '),
+                          style: TextStyle(color: outline, fontSize: 12),
+                        ),
+                      const SizedBox(height: 2),
                       Text(
-                        [
-                          if (lead.occupation != null) lead.occupation!,
-                          if (lead.age != null) 'อายุ ${lead.age}',
-                          _leadSourceLabels[lead.source] ?? lead.source,
-                        ].join(' · '),
-                        style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 12),
+                        'สนใจ: ${_leadProductInterestLabels[_leadProductInterest(lead)] ?? 'ไม่ระบุ'}',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                       ),
                       if (lead.quotedLoanAmount != null) ...[
                         const SizedBox(height: 2),
@@ -382,6 +873,8 @@ class _LeadCard extends ConsumerWidget {
                           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                         ),
                       ],
+                      const SizedBox(height: 4),
+                      Text('Lead เข้ามา: ${formatThaiDateTime(lead.createdAt)}', style: TextStyle(color: outline, fontSize: 11)),
                     ],
                   ),
                 ),
@@ -490,6 +983,12 @@ class _SlaCountdownState extends State<_SlaCountdown> {
 class _LeaderboardTab extends ConsumerWidget {
   const _LeaderboardTab();
 
+  static const _rankColors = [
+    Color(0xFFFFC107), // gold
+    Color(0xFFB0BEC5), // silver
+    Color(0xFFCD8A4E), // bronze
+  ];
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final leaderboardAsync = ref.watch(leaderboardProvider);
@@ -501,29 +1000,156 @@ class _LeaderboardTab extends ConsumerWidget {
       error: (err, _) => Center(child: Text('โหลดไม่สำเร็จ: $err')),
       data: (entries) => RefreshIndicator(
         onRefresh: () async => ref.invalidate(leaderboardProvider),
-        child: ListView(
-          padding: const EdgeInsets.all(12),
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-              child: Text('7 วันล่าสุด', style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 12)),
-            ),
-            for (var i = 0; i < entries.length; i++)
-              Card(
-                color: entries[i].branchId == myBranchId ? const Color(0xFFEC1968).withAlpha(20) : null,
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: i == 0 ? const Color(0xFFFFA726) : Colors.grey.withAlpha(60),
-                    child: Text('${i + 1}', style: const TextStyle(fontWeight: FontWeight.bold)),
+        child: entries.isEmpty
+            ? ListView(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Text(
+                      'ยังไม่มีข้อมูลอันดับสาขา',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Theme.of(context).colorScheme.outline),
+                    ),
                   ),
-                  title: Text(entries[i].branchName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('เยี่ยม ${entries[i].prospectsVisited} ร้าน · ติดต่อ Lead ${entries[i].leadsContacted} ราย'),
-                  trailing: Text('${entries[i].score} คะแนน', style: const TextStyle(fontWeight: FontWeight.bold)),
-                ),
+                ],
+              )
+            : ListView(
+                padding: const EdgeInsets.all(12),
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.emoji_events_rounded, size: 16, color: Theme.of(context).colorScheme.outline),
+                      const SizedBox(width: 6),
+                      Text(
+                        'อันดับกิจกรรมสาขา · 7 วันล่าสุด',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.outline,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  for (var i = 0; i < entries.length; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _LeaderboardCard(
+                        rank: i + 1,
+                        entry: entries[i],
+                        isMine: entries[i].branchId == myBranchId,
+                        rankColor: i < _rankColors.length ? _rankColors[i] : Colors.grey,
+                      ),
+                    ),
+                ],
               ),
-          ],
-        ),
+      ),
+    );
+  }
+}
+
+class _LeaderboardCard extends StatelessWidget {
+  const _LeaderboardCard({required this.rank, required this.entry, required this.isMine, required this.rankColor});
+  final int rank;
+  final LeaderboardEntryDto entry;
+  final bool isMine;
+  final Color rankColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final outline = Theme.of(context).colorScheme.outline;
+    final isTopThree = rank <= 3;
+    const mine = Color(0xFFEC1968);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isMine ? mine.withAlpha(14) : Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.withAlpha(45)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: rankColor.withAlpha(isTopThree ? 255 : 40), shape: BoxShape.circle),
+            child: isTopThree
+                ? const Icon(Icons.emoji_events_rounded, color: Colors.white, size: 20)
+                : Text('$rank', style: TextStyle(fontWeight: FontWeight.bold, color: rankColor)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        entry.branchName,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                    ),
+                    if (isMine) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(color: mine.withAlpha(30), borderRadius: BorderRadius.circular(6)),
+                        child: const Text(
+                          'สาขาคุณ',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: mine),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.storefront_outlined, size: 13, color: outline),
+                        const SizedBox(width: 3),
+                        Text('เยี่ยม ${entry.prospectsVisited} ร้าน', style: TextStyle(fontSize: 12, color: outline)),
+                      ],
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.phone_in_talk_outlined, size: 13, color: outline),
+                        const SizedBox(width: 3),
+                        Text('ติดต่อ ${entry.prospectsContacted} ร้าน', style: TextStyle(fontSize: 12, color: outline)),
+                      ],
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.call_outlined, size: 13, color: outline),
+                        const SizedBox(width: 3),
+                        Text('ติดต่อ Lead ${entry.leadsContacted} ราย', style: TextStyle(fontSize: 12, color: outline)),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('${entry.score}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              Text('คะแนน', style: TextStyle(fontSize: 11, color: outline)),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -10,6 +10,11 @@ class ProspectDto {
     required this.address,
     required this.phone,
     required this.status,
+    required this.applicationInterest,
+    required this.contactStatus,
+    required this.contactStatusUpdatedAt,
+    required this.calledAt,
+    required this.metAt,
     required this.note,
     required this.lastVisitedAt,
     required this.createdAt,
@@ -21,6 +26,11 @@ class ProspectDto {
   final String? address;
   final String? phone;
   final String status;
+  final String applicationInterest;
+  final String contactStatus;
+  final DateTime? contactStatusUpdatedAt;
+  final DateTime? calledAt;
+  final DateTime? metAt;
   final String? note;
   final DateTime? lastVisitedAt;
   final DateTime createdAt;
@@ -32,6 +42,13 @@ class ProspectDto {
     address: json['address'] as String?,
     phone: json['phone'] as String?,
     status: json['status'] as String,
+    applicationInterest: json['application_interest'] as String,
+    contactStatus: json['contact_status'] as String,
+    contactStatusUpdatedAt: json['contact_status_updated_at'] == null
+        ? null
+        : DateTime.parse(json['contact_status_updated_at'] as String),
+    calledAt: json['called_at'] == null ? null : DateTime.parse(json['called_at'] as String),
+    metAt: json['met_at'] == null ? null : DateTime.parse(json['met_at'] as String),
     note: json['note'] as String?,
     lastVisitedAt: json['last_visited_at'] == null ? null : DateTime.parse(json['last_visited_at'] as String),
     createdAt: DateTime.parse(json['created_at'] as String),
@@ -103,6 +120,7 @@ class LeaderboardEntryDto {
     required this.branchId,
     required this.branchName,
     required this.prospectsVisited,
+    required this.prospectsContacted,
     required this.leadsContacted,
     required this.score,
   });
@@ -110,6 +128,7 @@ class LeaderboardEntryDto {
   final String branchId;
   final String branchName;
   final int prospectsVisited;
+  final int prospectsContacted;
   final int leadsContacted;
   final int score;
 
@@ -117,6 +136,7 @@ class LeaderboardEntryDto {
     branchId: json['branch_id'] as String,
     branchName: json['branch_name'] as String,
     prospectsVisited: json['prospects_visited'] as int,
+    prospectsContacted: json['prospects_contacted'] as int,
     leadsContacted: json['leads_contacted'] as int,
     score: json['score'] as int,
   );
@@ -186,11 +206,15 @@ class BranchRepository {
     return (resp.data as List).map((e) => ProspectDto.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  // No contactStatus param — a prospect always starts not_scheduled server
+  // side (see ProspectCreateRequest's comment) so the leaderboard can't be
+  // gamed by backdating a call/visit at creation time.
   Future<ProspectDto> createProspect({
     required String name,
     String? businessType,
     String? address,
     String? phone,
+    String applicationInterest = 'not_applied',
   }) async {
     final resp = await _apiClient.dio.post(
       '/api/v1/turbo/branch/prospects',
@@ -199,6 +223,7 @@ class BranchRepository {
         if (businessType != null && businessType.isNotEmpty) 'business_type': businessType,
         if (address != null && address.isNotEmpty) 'address': address,
         if (phone != null && phone.isNotEmpty) 'phone': phone,
+        'application_interest': applicationInterest,
       },
     );
     return ProspectDto.fromJson(resp.data as Map<String, dynamic>);
@@ -210,6 +235,29 @@ class BranchRepository {
       data: {'status': status, if (note != null && note.isNotEmpty) 'note': note},
     );
     return ProspectDto.fromJson(resp.data as Map<String, dynamic>);
+  }
+
+  Future<ProspectDto> updateProspectContactStatus(String prospectId, {required String contactStatus}) async {
+    final resp = await _apiClient.dio.post(
+      '/api/v1/turbo/branch/prospects/$prospectId/contact-status',
+      data: {'contact_status': contactStatus},
+    );
+    return ProspectDto.fromJson(resp.data as Map<String, dynamic>);
+  }
+
+  Future<ProspectDto> updateProspectApplicationInterest(
+    String prospectId, {
+    required String applicationInterest,
+  }) async {
+    final resp = await _apiClient.dio.post(
+      '/api/v1/turbo/branch/prospects/$prospectId/application-interest',
+      data: {'application_interest': applicationInterest},
+    );
+    return ProspectDto.fromJson(resp.data as Map<String, dynamic>);
+  }
+
+  Future<void> deleteProspect(String prospectId) async {
+    await _apiClient.dio.delete('/api/v1/turbo/branch/prospects/$prospectId');
   }
 
   Future<List<LeadDto>> listLeads() async {
