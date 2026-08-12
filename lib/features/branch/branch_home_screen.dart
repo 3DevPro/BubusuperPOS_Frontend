@@ -40,6 +40,94 @@ String? _leadProductInterest(LeadDto lead) {
   return null;
 }
 
+String _errorMessage(Object e) {
+  return e is DioException ? (e.response?.data?['detail'] as String? ?? e.message ?? '$e') : '$e';
+}
+
+Widget _filterDropdown<T>(
+  BuildContext context, {
+  required T? value,
+  required List<DropdownMenuItem<T?>> items,
+  required ValueChanged<T?> onChanged,
+}) {
+  return DropdownButtonFormField<T?>(
+    initialValue: value,
+    isExpanded: true,
+    decoration: InputDecoration(
+      isDense: true,
+      filled: true,
+      fillColor: Theme.of(context).colorScheme.surface,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    ),
+    items: items,
+    onChanged: onChanged,
+  );
+}
+
+// Shared by the Prospects and Leads tabs — a search field followed by a row
+// of filter dropdowns in a shaded container. Callers own the dropdowns'
+// options/state; this only owns the shared layout/styling.
+class _SearchAndFilterBar extends StatelessWidget {
+  const _SearchAndFilterBar({
+    required this.searchController,
+    required this.hintText,
+    required this.query,
+    required this.onQueryChanged,
+    required this.onClear,
+    required this.filters,
+    this.topPadding = 12,
+  });
+
+  final TextEditingController searchController;
+  final String hintText;
+  final String query;
+  final ValueChanged<String> onQueryChanged;
+  final VoidCallback onClear;
+  final List<Widget> filters;
+  final double topPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(12, topPadding, 12, 0),
+          child: TextField(
+            controller: searchController,
+            decoration: InputDecoration(
+              hintText: hintText,
+              prefixIcon: const Icon(Icons.search),
+              isDense: true,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              suffixIcon: query.isEmpty ? null : IconButton(icon: const Icon(Icons.clear), onPressed: onClear),
+            ),
+            onChanged: onQueryChanged,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(100),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                for (var i = 0; i < filters.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 10),
+                  Expanded(child: filters[i]),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 // A blue picked to read clearly as "selected" against the brand pink
 // (0xFFEC1968) used elsewhere on these cards/badges — anything reddish would
 // blend in, so selection state needed its own hue.
@@ -133,85 +221,48 @@ class _ProspectsTabState extends ConsumerState<_ProspectsTab> {
         error: (err, _) => Center(child: Text('โหลดไม่สำเร็จ: $err')),
         data: (prospects) {
           final types = prospects.map((p) => p.businessType).whereType<String>().toSet().toList()..sort();
+          // The selected type can vanish out from under the filter (its last
+          // matching prospect gets deleted/retyped) — clear it rather than
+          // handing DropdownButtonFormField a value absent from its items.
+          if (_typeFilter != null && !types.contains(_typeFilter)) {
+            _typeFilter = null;
+          }
           final filtered = _filtered(prospects);
 
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(prospectsProvider),
             child: Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'ค้นหาชื่อร้าน',
-                      prefixIcon: const Icon(Icons.search),
-                      isDense: true,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      suffixIcon: _query.isEmpty
-                          ? null
-                          : IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () => setState(() {
-                                _searchController.clear();
-                                _query = '';
-                              }),
-                            ),
-                    ),
-                    onChanged: (v) => setState(() => _query = v),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(100),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<String?>(
-                            initialValue: _typeFilter,
-                            isExpanded: true,
-                            decoration: InputDecoration(
-                              isDense: true,
-                              filled: true,
-                              fillColor: Theme.of(context).colorScheme.surface,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                            ),
-                            items: [
-                              const DropdownMenuItem(value: null, child: Text('ทุกประเภทร้าน')),
-                              for (final type in types) DropdownMenuItem(value: type, child: Text(type)),
-                            ],
-                            onChanged: (v) => setState(() => _typeFilter = v),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: DropdownButtonFormField<String?>(
-                            initialValue: _contactFilter,
-                            isExpanded: true,
-                            decoration: InputDecoration(
-                              isDense: true,
-                              filled: true,
-                              fillColor: Theme.of(context).colorScheme.surface,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                            ),
-                            items: [
-                              const DropdownMenuItem(value: null, child: Text('ทุกสถานะการติดต่อ')),
-                              for (final entry in _contactStatusLabels.entries)
-                                DropdownMenuItem(value: entry.key, child: Text(entry.value)),
-                            ],
-                            onChanged: (v) => setState(() => _contactFilter = v),
-                          ),
-                        ),
+                _SearchAndFilterBar(
+                  searchController: _searchController,
+                  hintText: 'ค้นหาชื่อร้าน',
+                  query: _query,
+                  onQueryChanged: (v) => setState(() => _query = v),
+                  onClear: () => setState(() {
+                    _searchController.clear();
+                    _query = '';
+                  }),
+                  filters: [
+                    _filterDropdown<String>(
+                      context,
+                      value: _typeFilter,
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('ทุกประเภทร้าน')),
+                        for (final type in types) DropdownMenuItem(value: type, child: Text(type)),
                       ],
+                      onChanged: (v) => setState(() => _typeFilter = v),
                     ),
-                  ),
+                    _filterDropdown<String>(
+                      context,
+                      value: _contactFilter,
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('ทุกสถานะการติดต่อ')),
+                        for (final entry in _contactStatusLabels.entries)
+                          DropdownMenuItem(value: entry.key, child: Text(entry.value)),
+                      ],
+                      onChanged: (v) => setState(() => _contactFilter = v),
+                    ),
+                  ],
                 ),
                 Expanded(
                   child: filtered.isEmpty
@@ -279,46 +330,61 @@ class _ProspectCard extends ConsumerWidget {
     final color = _statusColor();
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        title: Text(prospect.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text([
-              if (prospect.businessType != null) prospect.businessType!,
-              if (prospect.phone != null) prospect.phone!,
-              if (prospect.note != null && prospect.note!.isNotEmpty) prospect.note!,
-            ].join(' · ')),
-            const SizedBox(height: 6),
-            Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                Text(
-                  'ประวัติการสมัครสินเชื่อ/ประกัน:',
-                  style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.outline),
-                ),
-                _badge(_applicationInterestLabels[prospect.applicationInterest] ?? prospect.applicationInterest, const Color(0xFFEC1968)),
-              ],
-            ),
-          ],
-        ),
-        isThreeLine: true,
-        titleAlignment: ListTileTitleAlignment.center,
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(color: color.withAlpha(30), borderRadius: BorderRadius.circular(10)),
-          child: Text(
-            _contactStatusLabels[prospect.contactStatus] ?? prospect.contactStatus,
-            style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11),
-          ),
-        ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
         onTap: () => showModalBottomSheet(
           context: context,
           isScrollControlled: true,
           shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
           builder: (context) => _VisitProspectSheet(prospect: prospect),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(prospect.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text([
+                      if (prospect.businessType != null) prospect.businessType!,
+                      if (prospect.phone != null) prospect.phone!,
+                      if (prospect.note != null && prospect.note!.isNotEmpty) prospect.note!,
+                    ].join(' · ')),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        Text(
+                          'ประวัติการสมัครสินเชื่อ/ประกัน:',
+                          style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.outline),
+                        ),
+                        _badge(
+                          _applicationInterestLabels[prospect.applicationInterest] ?? prospect.applicationInterest,
+                          const Color(0xFFEC1968),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: color.withAlpha(30), borderRadius: BorderRadius.circular(10)),
+                child: Text(
+                  _contactStatusLabels[prospect.contactStatus] ?? prospect.contactStatus,
+                  style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -391,6 +457,8 @@ class _AddProspectSheetState extends ConsumerState<_AddProspectSheet> {
               decoration: const InputDecoration(labelText: 'เบอร์โทรศัพท์'),
               keyboardType: TextInputType.phone,
             ),
+            const SizedBox(height: 12),
+            TextField(controller: _addressController, decoration: const InputDecoration(labelText: 'พื้นที่ / จังหวัด')),
             const SizedBox(height: 16),
             Text('ประวัติการสมัครสินเชื่อ/ประกัน', style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 12)),
             const SizedBox(height: 6),
@@ -469,6 +537,14 @@ class _VisitProspectSheetState extends ConsumerState<_VisitProspectSheet> {
       ]);
       ref.invalidate(prospectsProvider);
       if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      // Both calls run concurrently — either can fail independently, so on
+      // any failure we still invalidate to pull whatever partial state the
+      // server ended up with, rather than leaving the UI showing stale data.
+      ref.invalidate(prospectsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('บันทึกไม่สำเร็จ: ${_errorMessage(e)}')));
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -499,8 +575,7 @@ class _VisitProspectSheetState extends ConsumerState<_VisitProspectSheet> {
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
-        final message = e is DioException ? (e.response?.data?['detail'] as String? ?? e.message) : '$e';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('ลบไม่สำเร็จ: $message')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('ลบไม่สำเร็จ: ${_errorMessage(e)}')));
       }
     } finally {
       if (mounted) setState(() => _deleting = false);
@@ -686,81 +761,39 @@ class _LeadsTabState extends ConsumerState<_LeadsTab> {
                   },
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 18, 12, 0),
-                child: TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: 'ค้นหาชื่อร้าน',
-                    prefixIcon: const Icon(Icons.search),
-                    isDense: true,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    suffixIcon: _query.isEmpty
-                        ? null
-                        : IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () => setState(() {
-                              _searchController.clear();
-                              _query = '';
-                            }),
-                          ),
-                  ),
-                  onChanged: (v) => setState(() => _query = v),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(100),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String?>(
-                          initialValue: _statusFilter,
-                          isExpanded: true,
-                          decoration: InputDecoration(
-                            isDense: true,
-                            filled: true,
-                            fillColor: Theme.of(context).colorScheme.surface,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          ),
-                          items: const [
-                            DropdownMenuItem(value: null, child: Text('ทุกสถานะ')),
-                            DropdownMenuItem(value: 'contacted', child: Text('ติดต่อแล้ว')),
-                            DropdownMenuItem(value: 'lost', child: Text('ไม่สำเร็จ')),
-                            DropdownMenuItem(value: 'converted', child: Text('ปิดได้แล้ว')),
-                          ],
-                          onChanged: (v) => setState(() => _statusFilter = v),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: DropdownButtonFormField<String?>(
-                          initialValue: _interestFilter,
-                          isExpanded: true,
-                          decoration: InputDecoration(
-                            isDense: true,
-                            filled: true,
-                            fillColor: Theme.of(context).colorScheme.surface,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          ),
-                          items: const [
-                            DropdownMenuItem(value: null, child: Text('ทุกผลิตภัณฑ์')),
-                            DropdownMenuItem(value: 'loan', child: Text('สินเชื่อ')),
-                            DropdownMenuItem(value: 'insurance', child: Text('ประกัน')),
-                          ],
-                          onChanged: (v) => setState(() => _interestFilter = v),
-                        ),
-                      ),
+              _SearchAndFilterBar(
+                searchController: _searchController,
+                hintText: 'ค้นหาชื่อร้าน',
+                query: _query,
+                onQueryChanged: (v) => setState(() => _query = v),
+                onClear: () => setState(() {
+                  _searchController.clear();
+                  _query = '';
+                }),
+                topPadding: 18,
+                filters: [
+                  _filterDropdown<String>(
+                    context,
+                    value: _statusFilter,
+                    items: const [
+                      DropdownMenuItem(value: null, child: Text('ทุกสถานะ')),
+                      DropdownMenuItem(value: 'contacted', child: Text('ติดต่อแล้ว')),
+                      DropdownMenuItem(value: 'lost', child: Text('ไม่สำเร็จ')),
+                      DropdownMenuItem(value: 'converted', child: Text('ปิดได้แล้ว')),
                     ],
+                    onChanged: (v) => setState(() => _statusFilter = v),
                   ),
-                ),
+                  _filterDropdown<String>(
+                    context,
+                    value: _interestFilter,
+                    items: const [
+                      DropdownMenuItem(value: null, child: Text('ทุกผลิตภัณฑ์')),
+                      DropdownMenuItem(value: 'loan', child: Text('สินเชื่อ')),
+                      DropdownMenuItem(value: 'insurance', child: Text('ประกัน')),
+                    ],
+                    onChanged: (v) => setState(() => _interestFilter = v),
+                  ),
+                ],
               ),
               Expanded(
                 child: filtered.isEmpty
