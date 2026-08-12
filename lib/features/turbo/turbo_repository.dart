@@ -332,6 +332,151 @@ class LoanApplicationDto {
   );
 }
 
+class LoanCollateralDetailDto {
+  const LoanCollateralDetailDto({this.registrationNo, this.brandModel, this.year, this.note});
+
+  final String? registrationNo;
+  final String? brandModel;
+  final String? year;
+  final String? note;
+
+  Map<String, dynamic> toJson() => {
+    if (registrationNo != null && registrationNo!.isNotEmpty) 'registration_no': registrationNo,
+    if (brandModel != null && brandModel!.isNotEmpty) 'brand_model': brandModel,
+    if (year != null && year!.isNotEmpty) 'year': year,
+    if (note != null && note!.isNotEmpty) 'note': note,
+  };
+
+  factory LoanCollateralDetailDto.fromJson(Map<String, dynamic> json) => LoanCollateralDetailDto(
+    registrationNo: json['registration_no'] as String?,
+    brandModel: json['brand_model'] as String?,
+    year: json['year'] as String?,
+    note: json['note'] as String?,
+  );
+}
+
+class LoanApplicationEventDto {
+  LoanApplicationEventDto({
+    required this.id,
+    required this.fromStatus,
+    required this.toStatus,
+    required this.actorName,
+    required this.actorKind,
+    required this.note,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String? fromStatus;
+  final String toStatus;
+  final String actorName;
+  final String actorKind;
+  final String? note;
+  final DateTime createdAt;
+
+  factory LoanApplicationEventDto.fromJson(Map<String, dynamic> json) => LoanApplicationEventDto(
+    id: json['id'] as String,
+    fromStatus: json['from_status'] as String?,
+    toStatus: json['to_status'] as String,
+    actorName: json['actor_name'] as String,
+    actorKind: json['actor_kind'] as String,
+    note: json['note'] as String?,
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+}
+
+class LoanApplicationDetailDto {
+  LoanApplicationDetailDto({
+    required this.id,
+    required this.productId,
+    required this.requestedAmount,
+    required this.collateralValue,
+    required this.collateralDetail,
+    required this.termMonths,
+    required this.approvedAmount,
+    required this.monthlyInstallment,
+    required this.creditTierSnapshot,
+    required this.capReasons,
+    required this.status,
+    required this.rejectionReason,
+    required this.stageStartedAt,
+    required this.createdAt,
+    required this.decidedAt,
+    required this.nextStageEtaSeconds,
+    required this.canReapplyAt,
+    required this.events,
+  });
+
+  final String id;
+  final String productId;
+  final Decimal requestedAmount;
+  final Decimal collateralValue;
+  final LoanCollateralDetailDto collateralDetail;
+  final int termMonths;
+  final Decimal approvedAmount;
+  final Decimal monthlyInstallment;
+  final String creditTierSnapshot;
+  final List<String> capReasons;
+  final String status;
+  final String? rejectionReason;
+  final DateTime stageStartedAt;
+  final DateTime createdAt;
+  final DateTime? decidedAt;
+  final int? nextStageEtaSeconds;
+  final DateTime? canReapplyAt;
+  final List<LoanApplicationEventDto> events;
+
+  factory LoanApplicationDetailDto.fromJson(Map<String, dynamic> json) => LoanApplicationDetailDto(
+    id: json['id'] as String,
+    productId: json['product_id'] as String,
+    requestedAmount: Decimal.parse(json['requested_amount'] as String),
+    collateralValue: Decimal.parse(json['collateral_value'] as String),
+    collateralDetail: LoanCollateralDetailDto.fromJson(json['collateral_detail'] as Map<String, dynamic>),
+    termMonths: json['term_months'] as int,
+    approvedAmount: Decimal.parse(json['approved_amount'] as String),
+    monthlyInstallment: Decimal.parse(json['monthly_installment'] as String),
+    creditTierSnapshot: json['credit_tier_snapshot'] as String,
+    capReasons: (json['cap_reasons'] as List).map((e) => e as String).toList(),
+    status: json['status'] as String,
+    rejectionReason: json['rejection_reason'] as String?,
+    stageStartedAt: DateTime.parse(json['stage_started_at'] as String),
+    createdAt: DateTime.parse(json['created_at'] as String),
+    decidedAt: json['decided_at'] == null ? null : DateTime.parse(json['decided_at'] as String),
+    nextStageEtaSeconds: json['next_stage_eta_seconds'] as int?,
+    canReapplyAt: json['can_reapply_at'] == null ? null : DateTime.parse(json['can_reapply_at'] as String),
+    events: (json['events'] as List).map((e) => LoanApplicationEventDto.fromJson(e as Map<String, dynamic>)).toList(),
+  );
+}
+
+class LoanEligibilityDto {
+  LoanEligibilityDto({
+    required this.canApply,
+    required this.reason,
+    required this.cooldownUntil,
+    required this.inFlightApplicationId,
+  });
+
+  final bool canApply;
+  final String? reason;
+  final DateTime? cooldownUntil;
+  final String? inFlightApplicationId;
+
+  factory LoanEligibilityDto.fromJson(Map<String, dynamic> json) => LoanEligibilityDto(
+    canApply: json['can_apply'] as bool,
+    reason: json['reason'] as String?,
+    cooldownUntil: json['cooldown_until'] == null ? null : DateTime.parse(json['cooldown_until'] as String),
+    inFlightApplicationId: json['in_flight_application_id'] as String?,
+  );
+}
+
+// Terminal = the poller (loanApplicationDetailProvider) should stop — none
+// of these three can change server-side on their own: approved only moves
+// via the tenant's own disburse() tap (not the review clock), and
+// rejected/disbursed are dead ends. Every other status can still be moved
+// along by the auto-advance clock or a Champion, so polling must continue.
+bool isTerminalLoanStatus(String status) =>
+    status == 'approved' || status == 'rejected' || status == 'disbursed';
+
 class LoanAccountDto {
   LoanAccountDto({
     required this.id,
@@ -617,6 +762,7 @@ class TurboRepository {
     required Decimal requestedAmount,
     required Decimal collateralValue,
     required int termMonths,
+    LoanCollateralDetailDto collateralDetail = const LoanCollateralDetailDto(),
   }) async {
     final resp = await _apiClient.dio.post(
       '/api/v1/turbo/loans/applications',
@@ -625,6 +771,7 @@ class TurboRepository {
         'requested_amount': requestedAmount.toString(),
         'collateral_value': collateralValue.toString(),
         'term_months': termMonths,
+        'collateral_detail': collateralDetail.toJson(),
       },
     );
     return LoanApplicationDto.fromJson(resp.data as Map<String, dynamic>);
@@ -633,6 +780,21 @@ class TurboRepository {
   Future<List<LoanApplicationDto>> loanApplications() async {
     final resp = await _apiClient.dio.get('/api/v1/turbo/loans/applications');
     return (resp.data as List).map((e) => LoanApplicationDto.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<LoanApplicationDetailDto> loanApplication(String applicationId) async {
+    final resp = await _apiClient.dio.get('/api/v1/turbo/loans/applications/$applicationId');
+    return LoanApplicationDetailDto.fromJson(resp.data as Map<String, dynamic>);
+  }
+
+  Future<LoanEligibilityDto> loanEligibility() async {
+    final resp = await _apiClient.dio.get('/api/v1/turbo/loans/eligibility');
+    return LoanEligibilityDto.fromJson(resp.data as Map<String, dynamic>);
+  }
+
+  Future<LoanApplicationDetailDto> fastForwardLoanApplication(String applicationId) async {
+    final resp = await _apiClient.dio.post('/api/v1/turbo/loans/applications/$applicationId/demo/fast-forward');
+    return LoanApplicationDetailDto.fromJson(resp.data as Map<String, dynamic>);
   }
 
   Future<LoanAccountDto> disburseLoan(String applicationId) async {

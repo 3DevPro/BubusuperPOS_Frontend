@@ -6,16 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/formatters.dart';
 import '../auth/auth_provider.dart';
+import 'branch_labels.dart';
+import 'branch_loan_review_tab.dart';
 import 'branch_providers.dart';
 import 'branch_repository.dart';
 
 const _leadStatusLabels = {'new': 'ใหม่', 'contacted': 'ติดต่อแล้ว', 'converted': 'ปิดได้แล้ว', 'lost': 'ไม่สำเร็จ'};
-const _collateralKindLabels = {
-  'motorcycle': 'มอเตอร์ไซค์',
-  'car': 'รถยนต์',
-  'tractor': 'แทรกเตอร์',
-  'land_title': 'โฉนดที่ดิน',
-};
 const _applicationInterestLabels = {
   'not_applied': 'ไม่เคยสมัคร',
   'applied_loan': 'สินเชื่อ',
@@ -156,7 +152,7 @@ class BranchHomeScreen extends ConsumerWidget {
     final me = ref.watch(authControllerProvider).me;
 
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: Text(me?['name'] as String? ?? 'พนักงานสาขา'),
@@ -171,11 +167,12 @@ class BranchHomeScreen extends ConsumerWidget {
             tabs: [
               Tab(icon: Icon(Icons.storefront_outlined), text: 'ผู้ค้า'),
               Tab(icon: Icon(Icons.notifications_active_outlined), text: 'Lead'),
+              Tab(icon: Icon(Icons.fact_check_outlined), text: 'คำขอสินเชื่อ'),
               Tab(icon: Icon(Icons.leaderboard_outlined), text: 'อันดับสาขา'),
             ],
           ),
         ),
-        body: const TabBarView(children: [_ProspectsTab(), _LeadsTab(), _LeaderboardTab()]),
+        body: const TabBarView(children: [_ProspectsTab(), _LeadsTab(), LoanReviewTab(), _LeaderboardTab()]),
       ),
     );
   }
@@ -868,7 +865,7 @@ class _LeadCard extends ConsumerWidget {
                             if (lead.quotedMonthlyInstallment != null)
                               'ค่างวด ${formatBaht(lead.quotedMonthlyInstallment!)}/เดือน',
                             if (lead.collateralKind != null)
-                              _collateralKindLabels[lead.collateralKind] ?? lead.collateralKind!,
+                              collateralKindLabels[lead.collateralKind] ?? lead.collateralKind!,
                           ].join(' · '),
                           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                         ),

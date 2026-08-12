@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
@@ -64,6 +65,42 @@ final loanProductsProvider = FutureProvider.autoDispose<List<LoanProductDto>>((r
 final loanApplicationsProvider = FutureProvider.autoDispose<List<LoanApplicationDto>>((ref) {
   return ref.watch(turboRepositoryProvider).loanApplications();
 });
+
+final loanEligibilityProvider = FutureProvider.autoDispose<LoanEligibilityDto>((ref) {
+  return ref.watch(turboRepositoryProvider).loanEligibility();
+});
+
+const loanStatusPollInterval = Duration(seconds: 10);
+
+// The app's first polling provider — everything before this (e.g.
+// _SlaCountdown in branch_home_screen.dart) is a Timer that only repaints a
+// countdown already known client-side; this one actually refetches.
+//
+// autoDispose does the cleanup a Timer-in-ConsumerStatefulWidget would need
+// manual dispose()/mounted-guard bookkeeping for: leaving the screen drops
+// the last listener, which cancels this stream's subscription and stops the
+// polling loop on its own — no stray Timer, no double-cancellation risk.
+// await-then-delay (not Timer.periodic) also means a slow response can't
+// cause overlapping in-flight requests.
+final loanApplicationDetailProvider = StreamProvider.autoDispose
+    .family<LoanApplicationDetailDto, String>((ref, applicationId) async* {
+      final repo = ref.watch(turboRepositoryProvider);
+      var failures = 0;
+      while (true) {
+        try {
+          final detail = await repo.loanApplication(applicationId);
+          failures = 0;
+          yield detail;
+          if (isTerminalLoanStatus(detail.status)) return;
+        } on DioException {
+          // A transient network hiccup shouldn't end the stream — a
+          // StreamProvider that throws stops for good, silently leaving the
+          // tenant on a status screen that never updates again.
+          if (++failures >= 3) rethrow;
+        }
+        await Future<void>.delayed(loanStatusPollInterval);
+      }
+    });
 
 final loanAccountSummaryProvider = FutureProvider.autoDispose<LoanAccountSummaryDto?>((ref) {
   return ref.watch(turboRepositoryProvider).loanAccountSummary();

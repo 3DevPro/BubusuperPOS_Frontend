@@ -39,6 +39,7 @@ import '../features/turbo/insurance_screen.dart';
 import '../features/turbo/loan_account_screen.dart';
 import '../features/turbo/loan_apply_screen.dart';
 import '../features/turbo/loan_payment_screen.dart';
+import '../features/turbo/loan_status_screen.dart';
 import '../features/turbo/turbo_home_screen.dart';
 import '../features/turbo/turbo_repository.dart' show LoanInstallmentDto;
 import '../shared/app_shell.dart';
@@ -163,6 +164,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => LoanApplyScreen(productCode: state.uri.queryParameters['product']),
       ),
       GoRoute(path: '/turbo/loans/account', builder: (context, state) => const LoanAccountScreen()),
+      GoRoute(
+        path: '/turbo/loans/status/:applicationId',
+        builder: (context, state) =>
+            LoanStatusScreen(applicationId: state.pathParameters['applicationId']!),
+      ),
       // No single "get installment by id" endpoint exists on Backend (only
       // list-by-account and pay-by-id), so the full DTO the account screen
       // already loaded travels via `extra` instead of being re-fetched by a

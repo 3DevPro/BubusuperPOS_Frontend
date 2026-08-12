@@ -19,6 +19,10 @@ class LoanApplyScreen extends ConsumerStatefulWidget {
 class _LoanApplyScreenState extends ConsumerState<LoanApplyScreen> {
   final _collateralController = TextEditingController();
   final _amountController = TextEditingController();
+  final _registrationNoController = TextEditingController();
+  final _brandModelController = TextEditingController();
+  final _yearController = TextEditingController();
+  final _noteController = TextEditingController();
   String? _selectedCode;
   int _termMonths = 12;
   LoanQuoteDto? _quote;
@@ -31,7 +35,23 @@ class _LoanApplyScreenState extends ConsumerState<LoanApplyScreen> {
   void dispose() {
     _collateralController.dispose();
     _amountController.dispose();
+    _registrationNoController.dispose();
+    _brandModelController.dispose();
+    _yearController.dispose();
+    _noteController.dispose();
     super.dispose();
+  }
+
+  // land_title's paperwork doesn't map cleanly onto "registration/brand-model
+  // /year" (a vehicle collateral concept), so the same 4 fields get relabeled
+  // rather than growing a second set of collateral-specific inputs — the
+  // backend just stores whatever 4 strings arrive, unlabeled (see
+  // LoanCollateralDetail's field names, which stay generic on purpose).
+  (String, String, String) _collateralFieldLabels(String collateralKind) {
+    if (collateralKind == 'land_title') {
+      return ('เลขที่โฉนด', 'ตำบล/อำเภอ', 'เนื้อที่');
+    }
+    return ('เลขทะเบียน', 'ยี่ห้อ/รุ่น', 'ปี');
   }
 
   void _initDefaults(List<LoanProductDto> products) {
@@ -104,6 +124,12 @@ class _LoanApplyScreenState extends ConsumerState<LoanApplyScreen> {
         requestedAmount: requested,
         collateralValue: collateral,
         termMonths: _termMonths,
+        collateralDetail: LoanCollateralDetailDto(
+          registrationNo: _registrationNoController.text.trim(),
+          brandModel: _brandModelController.text.trim(),
+          year: _yearController.text.trim(),
+          note: _noteController.text.trim(),
+        ),
       );
       if (mounted) await _showSubmittedSheet(application);
     } on DioException catch (e) {
@@ -131,19 +157,33 @@ class _LoanApplyScreenState extends ConsumerState<LoanApplyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final productsAsync = ref.watch(loanProductsProvider);
+    final eligibilityAsync = ref.watch(loanEligibilityProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('ยื่นขอสินเชื่อ')),
-      body: productsAsync.when(
+      // check_eligibility() surfaces the same two guards apply() enforces
+      // server-side (one in-flight application, reject cooldown) ahead of
+      // time — blocking the form here means the tenant sees the reason
+      // immediately instead of filling everything in and hitting a 400.
+      body: eligibilityAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => Center(child: Text('โหลดข้อมูลไม่สำเร็จ: $err')),
-        data: (products) {
-          if (products.isEmpty) return const Center(child: Text('ยังไม่มีสินเชื่อในระบบ'));
-          _initDefaults(products);
-          final product = _productFor(products, _selectedCode ?? products.first.code);
+        data: (eligibility) => eligibility.canApply ? _buildForm() : _NotEligibleNotice(eligibility: eligibility),
+      ),
+    );
+  }
 
-          return ListView(
+  Widget _buildForm() {
+    final productsAsync = ref.watch(loanProductsProvider);
+    return productsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (err, _) => Center(child: Text('โหลดข้อมูลไม่สำเร็จ: $err')),
+      data: (products) {
+        if (products.isEmpty) return const Center(child: Text('ยังไม่มีสินเชื่อในระบบ'));
+        _initDefaults(products);
+        final product = _productFor(products, _selectedCode ?? products.first.code);
+
+        return ListView(
             padding: const EdgeInsets.all(16),
             children: [
               Wrap(
@@ -201,6 +241,37 @@ class _LoanApplyScreenState extends ConsumerState<LoanApplyScreen> {
                 decoration: const InputDecoration(labelText: 'จำนวนที่ต้องการยื่นขอ (บาท)', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 16),
+              Text('ข้อมูลหลักประกัน', style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 12)),
+              const SizedBox(height: 8),
+              Builder(
+                builder: (context) {
+                  final (regLabel, brandLabel, yearLabel) = _collateralFieldLabels(product.collateralKind);
+                  return Column(
+                    children: [
+                      TextField(
+                        controller: _registrationNoController,
+                        decoration: InputDecoration(labelText: regLabel, border: const OutlineInputBorder()),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _brandModelController,
+                        decoration: InputDecoration(labelText: brandLabel, border: const OutlineInputBorder()),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _yearController,
+                        decoration: InputDecoration(labelText: yearLabel, border: const OutlineInputBorder()),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _noteController,
+                        decoration: const InputDecoration(labelText: 'หมายเหตุ (ถ้ามี)', border: OutlineInputBorder()),
+                      ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
               Text('จำนวนงวด: $_termMonths เดือน', style: const TextStyle(fontWeight: FontWeight.w600)),
               Slider(
                 value: _termMonths.toDouble().clamp(product.minTermMonths.toDouble(), product.maxTermMonths.toDouble()),
@@ -243,6 +314,45 @@ class _LoanApplyScreenState extends ConsumerState<LoanApplyScreen> {
             ],
           );
         },
+      );
+  }
+}
+
+class _NotEligibleNotice extends StatelessWidget {
+  const _NotEligibleNotice({required this.eligibility});
+  final LoanEligibilityDto eligibility;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.hourglass_top, size: 40, color: Theme.of(context).colorScheme.outline),
+            const SizedBox(height: 12),
+            Text(
+              eligibility.reason ?? 'ยังไม่สามารถยื่นขอสินเชื่อได้ในตอนนี้',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            if (eligibility.cooldownUntil != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                'ยื่นใหม่ได้อีก ${eligibility.cooldownUntil!.difference(DateTime.now()).inDays + 1} วัน',
+                style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 13),
+              ),
+            ],
+            if (eligibility.inFlightApplicationId != null) ...[
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: () => context.pushReplacement('/turbo/loans/status/${eligibility.inFlightApplicationId}'),
+                child: const Text('ติดตามสถานะคำขอปัจจุบัน'),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -289,46 +399,12 @@ class _QuoteCard extends StatelessWidget {
   );
 }
 
-class _SubmittedSheet extends ConsumerStatefulWidget {
+class _SubmittedSheet extends ConsumerWidget {
   const _SubmittedSheet({required this.application});
   final LoanApplicationDto application;
 
   @override
-  ConsumerState<_SubmittedSheet> createState() => _SubmittedSheetState();
-}
-
-class _SubmittedSheetState extends ConsumerState<_SubmittedSheet> {
-  bool _disbursing = false;
-  String? _error;
-
-  Future<void> _disburseNow() async {
-    setState(() {
-      _disbursing = true;
-      _error = null;
-    });
-    try {
-      await ref.read(turboRepositoryProvider).disburseLoan(widget.application.id);
-      ref.invalidate(loanAccountSummaryProvider);
-      ref.invalidate(loanApplicationsProvider);
-      ref.invalidate(incomeProfileProvider);
-      if (mounted) {
-        Navigator.of(context).pop();
-        context.pushReplacement('/turbo/loans/account');
-      }
-    } on DioException catch (e) {
-      final data = e.response?.data;
-      if (mounted) {
-        setState(() {
-          _error = (data is Map && data['detail'] != null) ? data['detail'].toString() : 'เบิกจ่ายไม่สำเร็จ';
-        });
-      }
-    } finally {
-      if (mounted) setState(() => _disbursing = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
       child: Column(
@@ -340,34 +416,21 @@ class _SubmittedSheetState extends ConsumerState<_SubmittedSheet> {
           const Text('ส่งคำขอสินเชื่อแล้ว', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Text(
-            'วงเงิน ${formatBaht(widget.application.approvedAmount)} · ค่างวด ${formatBaht(widget.application.monthlyInstallment)}/เดือน\n'
-            'สาขาใกล้คุณจะติดต่อกลับภายใน 15 นาที',
+            'วงเงิน ${formatBaht(application.approvedAmount)} · ค่างวด ${formatBaht(application.monthlyInstallment)}/เดือน\n'
+            'สาขาใกล้คุณกำลังตรวจสอบคำขอ',
             style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 13),
           ),
-          if (_error != null) ...[
-            const SizedBox(height: 12),
-            Text(_error!, style: const TextStyle(color: Colors.red)),
-          ],
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: _disbursing ? null : _disburseNow,
               style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
-              child: _disbursing
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('รับเงินทันที (เดโม)'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                context.pushReplacement('/turbo/loans/status/${application.id}');
+              },
+              child: const Text('ติดตามสถานะ'),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'ปุ่มนี้เป็นการเดโมเท่านั้น — ของจริงต้องรอสาขายืนยันก่อนเบิกจ่าย',
-            style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.outline),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('ปิด')),
           ),
         ],
       ),

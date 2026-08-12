@@ -22,3 +22,11 @@ final leaderboardProvider = FutureProvider.autoDispose<List<LeaderboardEntryDto>
 final loanTermBoundsProvider = FutureProvider.autoDispose<List<LoanTermBoundsDto>>((ref) {
   return ref.watch(branchRepositoryProvider).publicLoanTermBounds();
 });
+
+// No poller on this side, unlike the tenant's loanApplicationDetailProvider
+// — a Champion is the one *causing* state changes here, and pull-to-refresh
+// already matches the other 3 branch tabs, so a StreamProvider would just
+// be background traffic nobody's waiting on.
+final branchLoanApplicationsProvider = FutureProvider.autoDispose<List<LoanReviewItemDto>>((ref) {
+  return ref.watch(branchRepositoryProvider).listLoanApplications();
+});

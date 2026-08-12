@@ -301,11 +301,41 @@ class _LoanProductTile extends StatelessWidget {
   }
 }
 
-class _NoLoanAccountCard extends StatelessWidget {
+const _inFlightStageLabels = {
+  'submitted': 'ยื่นคำขอ',
+  'doc_review': 'ตรวจเอกสาร',
+  'collateral_check': 'ตรวจหลักประกัน',
+  'under_review': 'พิจารณาอนุมัติ',
+  'approved': 'อนุมัติแล้ว รอเบิกจ่าย',
+};
+
+// First screen to actually read loanApplicationsProvider (it's been
+// declared in turbo_providers.dart since before this feature, unused until
+// now) — an in-flight application takes priority over the plain "no
+// account yet" message so the tenant lands on the status screen instead of
+// filling in the apply form again.
+class _NoLoanAccountCard extends ConsumerWidget {
   const _NoLoanAccountCard();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final applicationsAsync = ref.watch(loanApplicationsProvider);
+    final inFlight = applicationsAsync.valueOrNull?.where((a) => !isTerminalLoanStatus(a.status)).firstOrNull;
+
+    if (inFlight != null) {
+      return Card(
+        color: const Color(0xFFFFA726).withAlpha(20),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: ListTile(
+          leading: const Icon(Icons.hourglass_top, color: Color(0xFFFFA726)),
+          title: const Text('กำลังพิจารณาคำขอสินเชื่อ', style: TextStyle(fontWeight: FontWeight.bold)),
+          subtitle: Text('ขั้นตอน: ${_inFlightStageLabels[inFlight.status] ?? inFlight.status}'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => context.push('/turbo/loans/status/${inFlight.id}'),
+        ),
+      );
+    }
+
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(

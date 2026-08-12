@@ -15,6 +15,7 @@ void main() {
         '/turbo/insurance',
         '/turbo/loans/apply',
         '/turbo/loans/account',
+        '/turbo/loans/status/abc123',
       ];
       for (final path in paths) {
         expect(allowedRolesForRoute(path), {'owner', 'manager'}, reason: path);

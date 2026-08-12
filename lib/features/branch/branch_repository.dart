@@ -1,6 +1,11 @@
 import 'package:decimal/decimal.dart';
 
 import '../../core/api_client.dart';
+// Reused rather than redeclared — both /turbo/loans/applications/{id} and
+// /turbo/branch/loan-applications/{id} return the exact same event-log and
+// collateral-detail shapes (see the backend's LoanApplicationEventResponse,
+// shared by both response models), so one Dart DTO each covers both sides.
+import '../turbo/turbo_repository.dart' show LoanApplicationEventDto, LoanCollateralDetailDto;
 
 class ProspectDto {
   ProspectDto({
@@ -197,6 +202,100 @@ class LoanTermBoundsDto {
   );
 }
 
+class LoanReviewItemDto {
+  LoanReviewItemDto({
+    required this.id,
+    required this.tenantName,
+    required this.tenantPhone,
+    required this.productId,
+    required this.approvedAmount,
+    required this.monthlyInstallment,
+    required this.termMonths,
+    required this.collateralKind,
+    required this.collateralValue,
+    required this.collateralDetail,
+    required this.creditTierSnapshot,
+    required this.status,
+    required this.stageStartedAt,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String tenantName;
+  final String? tenantPhone;
+  final String productId;
+  final Decimal approvedAmount;
+  final Decimal monthlyInstallment;
+  final int termMonths;
+  final String collateralKind;
+  final Decimal collateralValue;
+  final LoanCollateralDetailDto collateralDetail;
+  final String creditTierSnapshot;
+  final String status;
+  final DateTime stageStartedAt;
+  final DateTime createdAt;
+
+  factory LoanReviewItemDto.fromJson(Map<String, dynamic> json) => LoanReviewItemDto(
+    id: json['id'] as String,
+    tenantName: json['tenant_name'] as String,
+    tenantPhone: json['tenant_phone'] as String?,
+    productId: json['product_id'] as String,
+    approvedAmount: Decimal.parse(json['approved_amount'] as String),
+    monthlyInstallment: Decimal.parse(json['monthly_installment'] as String),
+    termMonths: json['term_months'] as int,
+    collateralKind: json['collateral_kind'] as String,
+    collateralValue: Decimal.parse(json['collateral_value'] as String),
+    collateralDetail: LoanCollateralDetailDto.fromJson(json['collateral_detail'] as Map<String, dynamic>),
+    creditTierSnapshot: json['credit_tier_snapshot'] as String,
+    status: json['status'] as String,
+    stageStartedAt: DateTime.parse(json['stage_started_at'] as String),
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+}
+
+class LoanReviewDetailDto extends LoanReviewItemDto {
+  LoanReviewDetailDto({
+    required super.id,
+    required super.tenantName,
+    required super.tenantPhone,
+    required super.productId,
+    required super.approvedAmount,
+    required super.monthlyInstallment,
+    required super.termMonths,
+    required super.collateralKind,
+    required super.collateralValue,
+    required super.collateralDetail,
+    required super.creditTierSnapshot,
+    required super.status,
+    required super.stageStartedAt,
+    required super.createdAt,
+    required this.events,
+  });
+
+  final List<LoanApplicationEventDto> events;
+
+  factory LoanReviewDetailDto.fromJson(Map<String, dynamic> json) {
+    final item = LoanReviewItemDto.fromJson(json);
+    return LoanReviewDetailDto(
+      id: item.id,
+      tenantName: item.tenantName,
+      tenantPhone: item.tenantPhone,
+      productId: item.productId,
+      approvedAmount: item.approvedAmount,
+      monthlyInstallment: item.monthlyInstallment,
+      termMonths: item.termMonths,
+      collateralKind: item.collateralKind,
+      collateralValue: item.collateralValue,
+      collateralDetail: item.collateralDetail,
+      creditTierSnapshot: item.creditTierSnapshot,
+      status: item.status,
+      stageStartedAt: item.stageStartedAt,
+      createdAt: item.createdAt,
+      events: (json['events'] as List).map((e) => LoanApplicationEventDto.fromJson(e as Map<String, dynamic>)).toList(),
+    );
+  }
+}
+
 class BranchRepository {
   BranchRepository(this._apiClient);
   final ApiClient _apiClient;
@@ -333,5 +432,38 @@ class BranchRepository {
   Future<List<LoanTermBoundsDto>> publicLoanTermBounds() async {
     final resp = await _apiClient.dio.get('/api/v1/turbo/public/loan-term-bounds');
     return (resp.data as List).map((e) => LoanTermBoundsDto.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<LoanReviewItemDto>> listLoanApplications({bool includeDecided = false}) async {
+    final resp = await _apiClient.dio.get(
+      '/api/v1/turbo/branch/loan-applications',
+      queryParameters: {'include_decided': includeDecided},
+    );
+    return (resp.data as List).map((e) => LoanReviewItemDto.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<LoanReviewDetailDto> getLoanApplication(String applicationId) async {
+    final resp = await _apiClient.dio.get('/api/v1/turbo/branch/loan-applications/$applicationId');
+    return LoanReviewDetailDto.fromJson(resp.data as Map<String, dynamic>);
+  }
+
+  Future<LoanReviewDetailDto> advanceLoanApplication(
+    String applicationId, {
+    required String toStatus,
+    String? note,
+  }) async {
+    final resp = await _apiClient.dio.post(
+      '/api/v1/turbo/branch/loan-applications/$applicationId/advance',
+      data: {'to_status': toStatus, if (note != null && note.isNotEmpty) 'note': note},
+    );
+    return LoanReviewDetailDto.fromJson(resp.data as Map<String, dynamic>);
+  }
+
+  Future<LoanReviewDetailDto> rejectLoanApplication(String applicationId, {required String reason}) async {
+    final resp = await _apiClient.dio.post(
+      '/api/v1/turbo/branch/loan-applications/$applicationId/reject',
+      data: {'reason': reason},
+    );
+    return LoanReviewDetailDto.fromJson(resp.data as Map<String, dynamic>);
   }
 }
