@@ -1,4 +1,5 @@
 import 'package:decimal/decimal.dart';
+import 'package:dio/dio.dart';
 
 import '../../core/api_client.dart';
 
@@ -132,6 +133,19 @@ class ProductRepository {
   Future<ProductDto> update(String id, Map<String, dynamic> patch) async {
     final resp = await _apiClient.dio.patch('/api/v1/products/$id', data: patch);
     return ProductDto.fromJson(resp.data as Map<String, dynamic>);
+  }
+
+  /// Bytes rather than a file path — the only representation that works
+  /// uniformly across web (no filesystem) and native, both of which
+  /// image_picker's XFile supports via readAsBytes().
+  Future<String> uploadImage(List<int> bytes, {required String filename, required String contentType}) async {
+    final resp = await _apiClient.dio.post(
+      '/api/v1/products/upload-image',
+      data: FormData.fromMap({
+        'file': MultipartFile.fromBytes(bytes, filename: filename, contentType: DioMediaType.parse(contentType)),
+      }),
+    );
+    return (resp.data as Map<String, dynamic>)['image_url'] as String;
   }
 
   Future<void> delete(String id) => _apiClient.dio.delete('/api/v1/products/$id');

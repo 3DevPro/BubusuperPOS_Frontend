@@ -2,6 +2,7 @@ import 'package:decimal/decimal.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../shared/barcode_scanner_screen.dart';
 import 'product_providers.dart';
@@ -35,6 +36,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
 
   bool _lookingUp = false;
   ProductLookupDto? _referencePrice;
+
+  bool _uploadingImage = false;
 
   @override
   void dispose() {
@@ -180,6 +183,35 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     }
   }
 
+  Future<void> _pickAndUploadImage() async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (picked == null || !mounted) return;
+
+    setState(() => _uploadingImage = true);
+    try {
+      final bytes = await picked.readAsBytes();
+      final url = await ref
+          .read(productRepositoryProvider)
+          .uploadImage(bytes, filename: picked.name, contentType: picked.mimeType ?? _guessImageMimeType(picked.name));
+      if (mounted) setState(() => _imageUrlController.text = url);
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final detail = (data is Map && data['detail'] != null) ? data['detail'].toString() : 'อัปโหลดรูปไม่สำเร็จ';
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(detail)));
+    } finally {
+      if (mounted) setState(() => _uploadingImage = false);
+    }
+  }
+
+  // XFile.mimeType is often null on native platforms — fall back to
+  // extension so the backend's content-type allowlist still recognizes it.
+  String _guessImageMimeType(String filename) {
+    final lower = filename.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    return 'image/jpeg';
+  }
+
   Future<void> _addCategory() async {
     final controller = TextEditingController();
     final name = await showDialog<String>(
@@ -298,25 +330,43 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
             const SizedBox(width: 12),
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: _imageUrlController.text.trim().isEmpty
-                  ? Container(
-                      width: 48,
-                      height: 48,
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      child: const Icon(Icons.image_outlined, size: 20),
-                    )
-                  : Image.network(
-                      _imageUrlController.text.trim(),
-                      width: 48,
-                      height: 48,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Container(
+              child: InkWell(
+                onTap: _uploadingImage ? null : _pickAndUploadImage,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    _imageUrlController.text.trim().isEmpty
+                        ? Container(
+                            width: 48,
+                            height: 48,
+                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                            child: const Icon(Icons.image_outlined, size: 20),
+                          )
+                        : Image.network(
+                            _imageUrlController.text.trim(),
+                            width: 48,
+                            height: 48,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Container(
+                              width: 48,
+                              height: 48,
+                              color: Theme.of(context).colorScheme.errorContainer,
+                              child: const Icon(Icons.broken_image_outlined, size: 20),
+                            ),
+                          ),
+                    if (_uploadingImage)
+                      Container(
                         width: 48,
                         height: 48,
-                        color: Theme.of(context).colorScheme.errorContainer,
-                        child: const Icon(Icons.broken_image_outlined, size: 20),
+                        color: Colors.black.withAlpha(120),
+                        child: const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        ),
                       ),
-                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
