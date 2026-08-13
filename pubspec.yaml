@@ -53,6 +53,7 @@ dependencies:
   geolocator: ^14.0.3
   url_launcher: ^6.3.2
   image_picker: ^1.2.3
+  crop_your_image: ^2.0.0
 
 dev_dependencies:
   flutter_test:

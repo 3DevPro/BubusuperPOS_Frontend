@@ -20,6 +20,7 @@ import '../features/purchase_orders/purchase_order_form_screen.dart';
 import '../features/purchase_orders/purchase_order_list_screen.dart';
 import '../features/suppliers/supplier_form_screen.dart';
 import '../features/suppliers/supplier_list_screen.dart';
+import '../features/inventory/expiring_soon_screen.dart';
 import '../features/inventory/inventory_screen.dart';
 import '../features/inventory/low_stock_screen.dart';
 import '../features/inventory/stock_adjust_screen.dart';
@@ -179,6 +180,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => LoanPaymentScreen(installment: state.extra as LoanInstallmentDto),
       ),
       GoRoute(path: '/low-stock', builder: (context, state) => const LowStockScreen()),
+      GoRoute(path: '/expiring-soon', builder: (context, state) => const ExpiringSoonScreen()),
       GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
       GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
       GoRoute(path: '/staff', builder: (context, state) => const StaffScreen()),

@@ -10,3 +10,7 @@ final inventoryRepositoryProvider = Provider<InventoryRepository>((ref) {
 final lowStockProvider = FutureProvider.autoDispose<List<LowStockItemDto>>((ref) {
   return ref.watch(inventoryRepositoryProvider).lowStock();
 });
+
+final expiringSoonProvider = FutureProvider.autoDispose<List<ExpiringSoonItemDto>>((ref) {
+  return ref.watch(inventoryRepositoryProvider).expiringSoon();
+});

@@ -3,6 +3,11 @@ import 'package:dio/dio.dart';
 
 import '../../core/api_client.dart';
 
+// Date-only (no time component) so it round-trips cleanly through the
+// backend's `date` field, regardless of the picker's local timezone.
+String formatDateForApi(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
 class ProductDto {
   ProductDto({
     required this.id,
@@ -16,6 +21,7 @@ class ProductDto {
     required this.trackStock,
     required this.stockQty,
     required this.lowStockThreshold,
+    this.expiryDate,
     required this.isActive,
   });
 
@@ -30,9 +36,17 @@ class ProductDto {
   final bool trackStock;
   final int stockQty;
   final int lowStockThreshold;
+  final DateTime? expiryDate;
   final bool isActive;
 
   bool get isLowStock => trackStock && stockQty <= lowStockThreshold;
+
+  // Same 7-day horizon as the backend's default for GET /inventory/expiring-soon.
+  bool get isExpiringSoon {
+    if (expiryDate == null) return false;
+    final cutoff = DateTime.now().add(const Duration(days: 7));
+    return !expiryDate!.isAfter(cutoff);
+  }
 
   factory ProductDto.fromJson(Map<String, dynamic> json) => ProductDto(
     id: json['id'] as String,
@@ -46,6 +60,7 @@ class ProductDto {
     trackStock: json['track_stock'] as bool,
     stockQty: json['stock_qty'] as int,
     lowStockThreshold: json['low_stock_threshold'] as int,
+    expiryDate: json['expiry_date'] == null ? null : DateTime.parse(json['expiry_date'] as String),
     isActive: json['is_active'] as bool,
   );
 }
@@ -111,6 +126,7 @@ class ProductRepository {
     bool trackStock = true,
     int stockQty = 0,
     int lowStockThreshold = 5,
+    DateTime? expiryDate,
   }) async {
     final resp = await _apiClient.dio.post(
       '/api/v1/products',
@@ -125,6 +141,7 @@ class ProductRepository {
         'track_stock': trackStock,
         'stock_qty': stockQty,
         'low_stock_threshold': lowStockThreshold,
+        if (expiryDate != null) 'expiry_date': formatDateForApi(expiryDate),
       },
     );
     return ProductDto.fromJson(resp.data as Map<String, dynamic>);

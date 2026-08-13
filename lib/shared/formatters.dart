@@ -17,3 +17,10 @@ String formatThaiDateTime(DateTime dt) {
   final buddhistYear = local.year + 543;
   return formatter.format(local).replaceFirst('${local.year}', '$buddhistYear');
 }
+
+String formatThaiDate(DateTime dt) {
+  final local = dt.toLocal();
+  final formatter = DateFormat('d MMM y', 'th');
+  final buddhistYear = local.year + 543;
+  return formatter.format(local).replaceFirst('${local.year}', '$buddhistYear');
+}

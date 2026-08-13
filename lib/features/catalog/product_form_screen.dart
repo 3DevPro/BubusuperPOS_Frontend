@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:decimal/decimal.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -5,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../shared/barcode_scanner_screen.dart';
+import '../../shared/formatters.dart';
+import '../../shared/image_crop_screen.dart';
 import 'product_providers.dart';
 import 'product_repository.dart';
 
@@ -29,6 +33,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   final _imageUrlController = TextEditingController();
 
   String? _categoryId;
+  DateTime? _expiryDate;
   bool _trackStock = true;
   bool _submitting = false;
   String? _error;
@@ -62,7 +67,18 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     _lowStockController.text = '${product.lowStockThreshold}';
     _imageUrlController.text = product.imageUrl ?? '';
     _categoryId = product.categoryId;
+    _expiryDate = product.expiryDate;
     _trackStock = product.trackStock;
+  }
+
+  Future<void> _pickExpiryDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _expiryDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) setState(() => _expiryDate = picked);
   }
 
   Future<void> _submit() async {
@@ -91,6 +107,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           'cost_price': (Decimal.tryParse(_costPriceController.text.trim()) ?? Decimal.zero).toString(),
           'track_stock': _trackStock,
           'low_stock_threshold': int.tryParse(_lowStockController.text.trim()) ?? 5,
+          'expiry_date': _expiryDate == null ? null : formatDateForApi(_expiryDate!),
         });
       } else {
         await repo.create(
@@ -104,6 +121,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           trackStock: _trackStock,
           stockQty: int.tryParse(_stockQtyController.text.trim()) ?? 0,
           lowStockThreshold: int.tryParse(_lowStockController.text.trim()) ?? 5,
+          expiryDate: _expiryDate,
         );
       }
       ref.invalidate(productListProvider);
@@ -187,12 +205,18 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (picked == null || !mounted) return;
 
+    final rawBytes = await picked.readAsBytes();
+    if (!mounted) return;
+    final croppedBytes = await Navigator.of(
+      context,
+    ).push<Uint8List>(MaterialPageRoute(builder: (context) => ImageCropScreen(imageBytes: rawBytes)));
+    if (croppedBytes == null || !mounted) return;
+
     setState(() => _uploadingImage = true);
     try {
-      final bytes = await picked.readAsBytes();
       final url = await ref
           .read(productRepositoryProvider)
-          .uploadImage(bytes, filename: picked.name, contentType: picked.mimeType ?? _guessImageMimeType(picked.name));
+          .uploadImage(croppedBytes, filename: picked.name, contentType: picked.mimeType ?? _guessImageMimeType(picked.name));
       if (mounted) setState(() => _imageUrlController.text = url);
     } on DioException catch (e) {
       final data = e.response?.data;
@@ -466,7 +490,26 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(labelText: 'แจ้งเตือนเมื่อเหลือ', border: OutlineInputBorder()),
           ),
+          const SizedBox(height: 12),
         ],
+        InkWell(
+          onTap: _pickExpiryDate,
+          child: InputDecorator(
+            decoration: InputDecoration(
+              labelText: 'วันหมดอายุ (ถ้ามี)',
+              border: const OutlineInputBorder(),
+              suffixIcon: _expiryDate == null
+                  ? const Icon(Icons.calendar_month_outlined)
+                  : IconButton(
+                      icon: const Icon(Icons.clear),
+                      tooltip: 'ลบวันหมดอายุ',
+                      onPressed: () => setState(() => _expiryDate = null),
+                    ),
+            ),
+            child: Text(_expiryDate == null ? 'ไม่ระบุ' : formatThaiDate(_expiryDate!)),
+          ),
+        ),
+        const SizedBox(height: 12),
         if (_error != null) ...[
           const SizedBox(height: 12),
           Text(_error!, style: const TextStyle(color: Colors.red)),

@@ -19,8 +19,9 @@ const _destinations = [
   _NavDestination(Icons.more_horiz, 'เพิ่มเติม'),
 ];
 
-// Index into _destinations that the low-stock count badges — kept as a
-// constant so the badge placement stays correct if the nav order changes.
+// Index into _destinations that the low-stock/expiring-soon count badges —
+// kept as a constant so the badge placement stays correct if the nav order
+// changes.
 const _stockTabIndex = 1;
 
 /// One shell, two layouts: bottom nav on phones (checkout wants the full
@@ -28,9 +29,10 @@ const _stockTabIndex = 1;
 /// `navigationShell` is go_router's StatefulNavigationShell — each branch
 /// keeps its own navigation stack, so switching tabs doesn't lose state.
 ///
-/// A ConsumerWidget (not Stateless) so the low-stock count on the "สต็อก" tab
-/// stays visible from any tab — proactive, without the cashier having to open
-/// the inventory screen first to notice it's running low.
+/// A ConsumerWidget (not Stateless) so the low-stock + expiring-soon count on
+/// the "สต็อก" tab stays visible from any tab — proactive, without the
+/// cashier having to open the inventory screen first to notice something
+/// needs attention.
 class AppShell extends ConsumerWidget {
   const AppShell({super.key, required this.navigationShell});
 
@@ -47,7 +49,9 @@ class AppShell extends ConsumerWidget {
 
   Widget _icon(WidgetRef ref, int index, IconData icon) {
     if (index != _stockTabIndex) return Icon(icon);
-    final count = ref.watch(lowStockProvider).valueOrNull?.length ?? 0;
+    final lowStockCount = ref.watch(lowStockProvider).valueOrNull?.length ?? 0;
+    final expiringSoonCount = ref.watch(expiringSoonProvider).valueOrNull?.length ?? 0;
+    final count = lowStockCount + expiringSoonCount;
     if (count == 0) return Icon(icon);
     return Badge(label: Text('$count'), child: Icon(icon));
   }

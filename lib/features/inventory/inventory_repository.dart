@@ -21,6 +21,29 @@ class LowStockItemDto {
   );
 }
 
+class ExpiringSoonItemDto {
+  ExpiringSoonItemDto({
+    required this.id,
+    required this.name,
+    required this.stockQty,
+    required this.expiryDate,
+  });
+
+  final String id;
+  final String name;
+  final int stockQty;
+  final DateTime expiryDate;
+
+  bool get isExpired => expiryDate.isBefore(DateTime.now());
+
+  factory ExpiringSoonItemDto.fromJson(Map<String, dynamic> json) => ExpiringSoonItemDto(
+    id: json['id'] as String,
+    name: json['name'] as String,
+    stockQty: json['stock_qty'] as int,
+    expiryDate: DateTime.parse(json['expiry_date'] as String),
+  );
+}
+
 class InventoryRepository {
   InventoryRepository(this._apiClient);
   final ApiClient _apiClient;
@@ -49,5 +72,10 @@ class InventoryRepository {
   Future<List<LowStockItemDto>> lowStock() async {
     final resp = await _apiClient.dio.get('/api/v1/inventory/low-stock');
     return (resp.data as List).map((e) => LowStockItemDto.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<ExpiringSoonItemDto>> expiringSoon({int days = 7}) async {
+    final resp = await _apiClient.dio.get('/api/v1/inventory/expiring-soon', queryParameters: {'days': days});
+    return (resp.data as List).map((e) => ExpiringSoonItemDto.fromJson(e as Map<String, dynamic>)).toList();
   }
 }

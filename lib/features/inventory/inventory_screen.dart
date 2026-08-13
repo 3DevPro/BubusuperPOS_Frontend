@@ -15,6 +15,7 @@ class InventoryScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final productsAsync = ref.watch(productListProvider);
     final lowStockAsync = ref.watch(lowStockProvider);
+    final expiringSoonAsync = ref.watch(expiringSoonProvider);
     final isWide = MediaQuery.sizeOf(context).width >= 900;
     final role = ref.watch(authControllerProvider).me?['role'];
     // Cashiers can browse stock (Permission.view_products) but not edit
@@ -34,6 +35,16 @@ class InventoryScreen extends ConsumerWidget {
                     icon: Badge(label: Text('${items.length}'), child: const Icon(Icons.warning_amber)),
                     tooltip: 'สินค้าใกล้หมด',
                     onPressed: () => context.push('/low-stock'),
+                  ),
+            orElse: () => const SizedBox.shrink(),
+          ),
+          expiringSoonAsync.maybeWhen(
+            data: (items) => items.isEmpty
+                ? const SizedBox.shrink()
+                : IconButton(
+                    icon: Badge(label: Text('${items.length}'), child: const Icon(Icons.event_busy)),
+                    tooltip: 'สินค้าใกล้หมดอายุ',
+                    onPressed: () => context.push('/expiring-soon'),
                   ),
             orElse: () => const SizedBox.shrink(),
           ),
@@ -81,6 +92,11 @@ class _ProductList extends StatelessWidget {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (product.isExpiringSoon)
+                const Padding(
+                  padding: EdgeInsets.only(right: 4),
+                  child: Icon(Icons.event_busy, color: Colors.red, size: 18),
+                ),
               Text(
                 product.trackStock ? '${product.stockQty} ชิ้น' : 'ไม่นับสต็อก',
                 style: TextStyle(
@@ -136,12 +152,22 @@ class _ProductTable extends ConsumerWidget {
                 DataCell(Text(categoryNames[product.categoryId] ?? '-')),
                 DataCell(Text(formatBaht(product.sellPrice))),
                 DataCell(
-                  Text(
-                    product.trackStock ? '${product.stockQty} ชิ้น' : 'ไม่นับสต็อก',
-                    style: TextStyle(
-                      color: product.isLowStock ? Colors.orange : null,
-                      fontWeight: product.isLowStock ? FontWeight.bold : null,
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (product.isExpiringSoon)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 4),
+                          child: Icon(Icons.event_busy, color: Colors.red, size: 16),
+                        ),
+                      Text(
+                        product.trackStock ? '${product.stockQty} ชิ้น' : 'ไม่นับสต็อก',
+                        style: TextStyle(
+                          color: product.isLowStock ? Colors.orange : null,
+                          fontWeight: product.isLowStock ? FontWeight.bold : null,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 DataCell(
