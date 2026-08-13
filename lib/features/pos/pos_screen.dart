@@ -13,6 +13,22 @@ import 'cart_panel.dart';
 import 'offline/offline_sale_queue.dart';
 import 'offline/offline_sync_service.dart';
 
+/// Compares a scanned code against a stored barcode, tolerant of the
+/// UPC-A/EAN-13 leading-zero difference (a 12-digit UPC-A scan and its
+/// 13-digit EAN-13 equivalent otherwise fail a strict `==` check even
+/// though they identify the same product).
+bool _barcodesMatch(String scanned, String? stored) {
+  if (stored == null) return false;
+  if (scanned == stored) return true;
+  if (scanned.length == 12 && stored.length == 13 && stored.startsWith('0')) {
+    return stored.substring(1) == scanned;
+  }
+  if (stored.length == 12 && scanned.length == 13 && scanned.startsWith('0')) {
+    return scanned.substring(1) == stored;
+  }
+  return false;
+}
+
 class PosScreen extends ConsumerStatefulWidget {
   const PosScreen({super.key});
 
@@ -45,7 +61,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     if (code == null || !mounted) return;
 
     final products = await ref.read(productRepositoryProvider).list(search: code);
-    final exactMatches = products.where((p) => p.barcode == code).toList();
+    final exactMatches = products.where((p) => _barcodesMatch(code, p.barcode)).toList();
 
     if (!mounted) return;
     if (exactMatches.length == 1) {
