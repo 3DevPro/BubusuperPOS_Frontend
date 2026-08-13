@@ -30,7 +30,10 @@ class OfflineSyncService {
         try {
           await salesRepo.checkout(
             clientUuid: sale.clientUuid,
-            items: [for (final i in sale.items) CheckoutItem(productId: i.productId, qty: i.qty)],
+            items: [
+              for (final i in sale.items)
+                CheckoutItem(productId: i.productId, qty: i.qty, discount: Decimal.parse(i.discount)),
+            ],
             discount: Decimal.parse(sale.discount),
             paymentMethod: sale.paymentMethod,
             customerId: sale.customerId,

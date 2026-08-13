@@ -10,8 +10,10 @@ import '../features/auth/signup_screen.dart';
 import '../features/branch/branch_home_screen.dart';
 import '../features/branch/branch_signup_screen.dart';
 import '../features/branch/public_quote_screen.dart';
+import '../features/catalog/barcode_label_screen.dart';
 import '../features/catalog/category_management_screen.dart';
 import '../features/catalog/product_form_screen.dart';
+import '../features/notifications/notification_inbox_screen.dart';
 import '../features/chat/chat_screen.dart';
 import '../features/customers/customer_form_screen.dart';
 import '../features/customers/customer_list_screen.dart';
@@ -90,6 +92,7 @@ Set<String>? allowedRolesForRoute(String path) {
   if (path.startsWith('/products/') && (path.endsWith('/edit') || path.endsWith('/stock-adjust'))) {
     return _ownerAndManager; // manage_products / adjust_inventory
   }
+  if (path == '/barcode-labels') return _ownerAndManager; // Permission.manage_products
   if (path.startsWith('/receipt/') && path.endsWith('/refund')) return _ownerAndManager; // Permission.refund_sale
   return null;
 }
@@ -150,7 +153,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/checkout', builder: (context, state) => const CheckoutScreen()),
       GoRoute(
         path: '/receipt/:saleId',
-        builder: (context, state) => ReceiptScreen(saleId: state.pathParameters['saleId']!),
+        builder: (context, state) => ReceiptScreen(
+          saleId: state.pathParameters['saleId']!,
+          autoPrint: state.uri.queryParameters['autoprint'] == '1',
+        ),
       ),
       GoRoute(
         path: '/receipt/:saleId/refund',
@@ -180,8 +186,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => LoanPaymentScreen(installment: state.extra as LoanInstallmentDto),
       ),
       GoRoute(path: '/low-stock', builder: (context, state) => const LowStockScreen()),
+      GoRoute(path: '/barcode-labels', builder: (context, state) => const BarcodeLabelScreen()),
       GoRoute(path: '/expiring-soon', builder: (context, state) => const ExpiringSoonScreen()),
       GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
+      GoRoute(path: '/notifications', builder: (context, state) => const NotificationInboxScreen()),
       GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
       GoRoute(path: '/staff', builder: (context, state) => const StaffScreen()),
       GoRoute(path: '/categories', builder: (context, state) => const CategoryManagementScreen()),

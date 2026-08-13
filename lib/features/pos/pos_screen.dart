@@ -60,7 +60,24 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     ).push<String>(MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()));
     if (code == null || !mounted) return;
 
-    final products = await ref.read(productRepositoryProvider).list(search: code);
+    final repo = ref.read(productRepositoryProvider);
+
+    // Exact match on the indexed (tenant_id, barcode) column — the fast,
+    // unambiguous path for the common case. Falls back to the ILIKE search
+    // + client-side tolerant match only when that misses, which is what
+    // still catches a UPC-A scan against a stored EAN-13 (or vice versa) —
+    // a leading-zero difference the exact endpoint's strict `==` won't see.
+    final exact = await repo.getByBarcode(code);
+    if (!mounted) return;
+    if (exact != null) {
+      ref.read(cartProvider.notifier).addProduct(exact);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('เพิ่ม ${exact.name} แล้ว'), duration: const Duration(seconds: 1)));
+      return;
+    }
+
+    final products = await repo.list(search: code);
     final exactMatches = products.where((p) => _barcodesMatch(code, p.barcode)).toList();
 
     if (!mounted) return;
@@ -219,13 +236,14 @@ class _ProductCard extends StatelessWidget {
                 child: Container(
                   width: double.infinity,
                   color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  // BoxFit.contain (not cover) so a photo shot in a different
-                  // aspect ratio than this card never gets cropped away —
-                  // seeing the whole product matters more than filling the tile.
+                  // BoxFit.cover fills the tile edge-to-edge — safe now that
+                  // every upload goes through ImageCropScreen locked to this
+                  // same aspect ratio, so there's no unrelated content at the
+                  // edges left to accidentally crop away.
                   child: Image.network(
                     imageUrl,
                     width: double.infinity,
-                    fit: BoxFit.contain,
+                    fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) => Container(
                       color: Theme.of(context).colorScheme.surfaceContainerHighest,
                       child: const Icon(Icons.image_not_supported_outlined),

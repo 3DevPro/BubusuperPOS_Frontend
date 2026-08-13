@@ -107,10 +107,46 @@ class ProductRepository {
     return ProductLookupDto.fromJson(resp.data as Map<String, dynamic>);
   }
 
-  Future<List<ProductDto>> list({String? search}) async {
+  Future<List<ProductDto>> list({String? search, bool? hasBarcode}) async {
     final resp = await _apiClient.dio.get(
       '/api/v1/products',
-      queryParameters: {if (search != null && search.isNotEmpty) 'q': search},
+      queryParameters: {
+        if (search != null && search.isNotEmpty) 'q': search,
+        if (hasBarcode != null) 'has_barcode': hasBarcode,
+      },
+    );
+    return (resp.data as List).map((e) => ProductDto.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Products that have never been assigned a barcode — feeds the "generate
+  /// barcode" bulk action and the label-sheet product picker.
+  Future<List<ProductDto>> listMissingBarcode() => list(hasBarcode: false);
+
+  /// Exact-match lookup by barcode, used by the POS scan flow instead of the
+  /// ILIKE-based free-text search — null (not an exception) when nothing
+  /// matches, since "no product with this barcode" is an expected outcome
+  /// of a scan, not an error.
+  Future<ProductDto?> getByBarcode(String barcode) async {
+    try {
+      final resp = await _apiClient.dio.get('/api/v1/products/by-barcode/$barcode');
+      return ProductDto.fromJson(resp.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  Future<ProductDto> assignBarcode(String id) async {
+    final resp = await _apiClient.dio.post('/api/v1/products/$id/barcode');
+    return ProductDto.fromJson(resp.data as Map<String, dynamic>);
+  }
+
+  /// Pass [productIds] for a specific selection, or [allMissing] to generate
+  /// a barcode for every product in the shop that doesn't have one yet.
+  Future<List<ProductDto>> assignBarcodesBulk({List<String>? productIds, bool allMissing = false}) async {
+    final resp = await _apiClient.dio.post(
+      '/api/v1/products/assign-barcodes',
+      data: {'product_ids': productIds ?? const <String>[], 'all_missing': allMissing},
     );
     return (resp.data as List).map((e) => ProductDto.fromJson(e as Map<String, dynamic>)).toList();
   }

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/auth_provider.dart';
+import '../notifications/notification_providers.dart';
+import '../notifications/notification_repository.dart';
 import 'settings_providers.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -34,12 +36,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String? _loyaltyError;
   String? _loyaltySuccessMessage;
 
+  final _taxIdController = TextEditingController();
+  final _addressController = TextEditingController();
+  final _branchCodeController = TextEditingController();
+  final _receiptFooterController = TextEditingController();
+  bool _taxInvoiceSubmitting = false;
+  String? _taxInvoiceError;
+  String? _taxInvoiceSuccessMessage;
+
   @override
   void dispose() {
     _promptpayController.dispose();
     _vatRateController.dispose();
     _bahtPerPointController.dispose();
     _pointValueController.dispose();
+    _taxIdController.dispose();
+    _addressController.dispose();
+    _branchCodeController.dispose();
+    _receiptFooterController.dispose();
     super.dispose();
   }
 
@@ -134,6 +148,38 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _saveTaxInvoice() async {
+    setState(() {
+      _taxInvoiceSubmitting = true;
+      _taxInvoiceError = null;
+      _taxInvoiceSuccessMessage = null;
+    });
+    try {
+      final taxId = _taxIdController.text.trim();
+      await ref
+          .read(tenantRepositoryProvider)
+          .updateTaxInvoiceSettings(
+            taxId: taxId.isEmpty ? null : taxId,
+            address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
+            branchCode: _branchCodeController.text.trim().isEmpty ? null : _branchCodeController.text.trim(),
+            receiptFooter: _receiptFooterController.text.trim().isEmpty
+                ? null
+                : _receiptFooterController.text.trim(),
+          );
+      ref.invalidate(tenantSettingsProvider);
+      if (mounted) setState(() => _taxInvoiceSuccessMessage = 'บันทึกแล้ว');
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      setState(() {
+        _taxInvoiceError = (data is Map && data['detail'] != null)
+            ? data['detail'].toString()
+            : 'บันทึกไม่สำเร็จ ตรวจสอบเลขประจำตัวผู้เสียภาษีอีกครั้ง';
+      });
+    } finally {
+      if (mounted) setState(() => _taxInvoiceSubmitting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isOwner = ref.watch(authControllerProvider).me?['role'] == 'owner';
@@ -153,6 +199,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             _bahtPerPointController.text = settings.bahtPerPoint.toString();
             _pointValueController.text = settings.pointValueBaht.toString();
             _loyaltyEnabled = settings.loyaltyEnabled;
+            _taxIdController.text = settings.taxId ?? '';
+            _addressController.text = settings.address ?? '';
+            _branchCodeController.text = settings.branchCode ?? '';
+            _receiptFooterController.text = settings.receiptFooter ?? '';
             _loadedInitialValue = true;
           }
           return ListView(
@@ -304,10 +354,203 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       : const Text('บันทึกแต้มสะสม'),
                 ),
               ],
+              const Divider(height: 40),
+              const Text('ข้อมูลใบกำกับภาษี', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(
+                'กรอกครบแล้วใบเสร็จจะพิมพ์เป็น "ใบกำกับภาษีอย่างย่อ" อัตโนมัติเมื่อเปิดใช้งาน VAT',
+                style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _taxIdController,
+                enabled: isOwner,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'เลขประจำตัวผู้เสียภาษี (13 หลัก)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _addressController,
+                enabled: isOwner,
+                maxLines: 2,
+                decoration: const InputDecoration(labelText: 'ที่อยู่ร้าน', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _branchCodeController,
+                enabled: isOwner,
+                decoration: const InputDecoration(
+                  labelText: 'เลขที่สาขา (00000 = สำนักงานใหญ่)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _receiptFooterController,
+                enabled: isOwner,
+                decoration: const InputDecoration(labelText: 'ข้อความท้ายใบเสร็จ', border: OutlineInputBorder()),
+              ),
+              if (_taxInvoiceError != null) ...[
+                const SizedBox(height: 12),
+                Text(_taxInvoiceError!, style: const TextStyle(color: Colors.red)),
+              ],
+              if (_taxInvoiceSuccessMessage != null) ...[
+                const SizedBox(height: 12),
+                Text(_taxInvoiceSuccessMessage!, style: const TextStyle(color: Colors.green)),
+              ],
+              if (isOwner) ...[
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: _taxInvoiceSubmitting ? null : _saveTaxInvoice,
+                  child: _taxInvoiceSubmitting
+                      ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('บันทึกใบกำกับภาษี'),
+                ),
+              ],
+              const Divider(height: 40),
+              _NotificationSettingsSection(isOwner: isOwner),
             ],
           );
         },
       ),
+    );
+  }
+}
+
+class _NotificationSettingsSection extends ConsumerStatefulWidget {
+  const _NotificationSettingsSection({required this.isOwner});
+  final bool isOwner;
+
+  @override
+  ConsumerState<_NotificationSettingsSection> createState() => _NotificationSettingsSectionState();
+}
+
+class _NotificationSettingsSectionState extends ConsumerState<_NotificationSettingsSection> {
+  bool _loaded = false;
+  bool _lowStockEnabled = true;
+  TimeOfDay _lowStockTime = const TimeOfDay(hour: 9, minute: 0);
+  bool _dailySummaryEnabled = true;
+  TimeOfDay _dailySummaryTime = const TimeOfDay(hour: 20, minute: 0);
+  bool _submitting = false;
+  String? _error;
+  String? _successMessage;
+
+  static TimeOfDay _parseTime(String hhmmss) {
+    final parts = hhmmss.split(':');
+    return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+  }
+
+  static String _formatTime(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:00';
+
+  Future<void> _pickTime(TimeOfDay initial, ValueChanged<TimeOfDay> onPicked) async {
+    if (!widget.isOwner) return;
+    final picked = await showTimePicker(context: context, initialTime: initial);
+    if (picked != null) setState(() => onPicked(picked));
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _submitting = true;
+      _error = null;
+      _successMessage = null;
+    });
+    try {
+      await ref
+          .read(notificationRepositoryProvider)
+          .updateSettings({
+            'low_stock_enabled': _lowStockEnabled,
+            'low_stock_time': _formatTime(_lowStockTime),
+            'daily_summary_enabled': _dailySummaryEnabled,
+            'daily_summary_time': _formatTime(_dailySummaryTime),
+          });
+      ref.invalidate(notificationSettingsProvider);
+      if (mounted) setState(() => _successMessage = 'บันทึกแล้ว');
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      setState(() {
+        _error = (data is Map && data['detail'] != null) ? data['detail'].toString() : 'บันทึกไม่สำเร็จ';
+      });
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settingsAsync = ref.watch(notificationSettingsProvider);
+
+    return settingsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (err, _) => Text('โหลดการแจ้งเตือนไม่สำเร็จ: $err'),
+      data: (NotificationSettingsDto settings) {
+        if (!_loaded) {
+          _lowStockEnabled = settings.lowStockEnabled;
+          _lowStockTime = _parseTime(settings.lowStockTime);
+          _dailySummaryEnabled = settings.dailySummaryEnabled;
+          _dailySummaryTime = _parseTime(settings.dailySummaryTime);
+          _loaded = true;
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('การแจ้งเตือน', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(
+              'แจ้งเตือนสต๊อกใกล้หมดและสรุปยอดขายประจำวัน ผ่านกล่องข้อความในแอป',
+              style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('แจ้งเตือนสต๊อกใกล้หมด'),
+              value: _lowStockEnabled,
+              onChanged: widget.isOwner ? (v) => setState(() => _lowStockEnabled = v) : null,
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('เวลาแจ้งเตือนสต๊อก'),
+              trailing: Text(_lowStockTime.format(context)),
+              enabled: widget.isOwner && _lowStockEnabled,
+              onTap: () => _pickTime(_lowStockTime, (t) => _lowStockTime = t),
+            ),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('สรุปยอดขายประจำวัน'),
+              value: _dailySummaryEnabled,
+              onChanged: widget.isOwner ? (v) => setState(() => _dailySummaryEnabled = v) : null,
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('เวลาสรุปยอดขาย'),
+              trailing: Text(_dailySummaryTime.format(context)),
+              enabled: widget.isOwner && _dailySummaryEnabled,
+              onTap: () => _pickTime(_dailySummaryTime, (t) => _dailySummaryTime = t),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!, style: const TextStyle(color: Colors.red)),
+            ],
+            if (_successMessage != null) ...[
+              const SizedBox(height: 12),
+              Text(_successMessage!, style: const TextStyle(color: Colors.green)),
+            ],
+            if (widget.isOwner) ...[
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: _submitting ? null : _save,
+                child: _submitting
+                    ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('บันทึกการแจ้งเตือน'),
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 }

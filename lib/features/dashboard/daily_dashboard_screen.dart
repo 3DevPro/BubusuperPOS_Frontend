@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../shared/formatters.dart';
 import '../auth/auth_provider.dart';
+import '../notifications/notification_providers.dart';
 import '../reports/reports_providers.dart';
 import '../reports/reports_repository.dart';
 import '../turbo/claim_banner.dart';
@@ -38,9 +39,20 @@ class DailyDashboardScreen extends ConsumerWidget {
     // would just 403, so skip even asking rather than show-then-fail.
     final canManageInsurance = role == 'owner' || role == 'manager';
 
+    final unreadCount = ref.watch(unreadCountProvider).valueOrNull ?? 0;
+
     return Scaffold(
       appBar: AppBar(
         title: Image.asset('assets/images/turbo_logo.png', height: 44, fit: BoxFit.contain),
+        actions: [
+          IconButton(
+            icon: unreadCount > 0
+                ? Badge(label: Text('$unreadCount'), child: const Icon(Icons.notifications_outlined))
+                : const Icon(Icons.notifications_outlined),
+            tooltip: 'การแจ้งเตือน',
+            onPressed: () => context.push('/notifications'),
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: () async {

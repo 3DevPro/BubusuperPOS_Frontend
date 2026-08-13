@@ -65,7 +65,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             redeemPoints: cart.pointsToRedeem,
           );
       ref.read(cartProvider.notifier).clear();
-      if (mounted) context.go('/receipt/${sale.id}');
+      if (mounted) context.go('/receipt/${sale.id}?autoprint=1');
     } on DioException catch (e) {
       if (isNetworkError(e)) {
         // เน็ตหลุด — เก็บออเดอร์ไว้ในเครื่องด้วย client_uuid เดิม แล้วปล่อยให้
@@ -77,7 +77,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               PendingSale(
                 clientUuid: _clientUuid,
                 items: [
-                  for (final line in cart.lines) PendingSaleItem(productId: line.product.id, qty: line.qty),
+                  for (final line in cart.lines)
+                    PendingSaleItem(productId: line.product.id, qty: line.qty, discount: line.discount.toString()),
                 ],
                 discount: cart.discount.toString(),
                 paymentMethod: _paymentMethod,

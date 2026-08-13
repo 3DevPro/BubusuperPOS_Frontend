@@ -81,6 +81,15 @@ class MoreScreen extends ConsumerWidget {
                 onTap: () => context.push('/categories'),
               ),
             ),
+            const SizedBox(height: 8),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.qr_code_2_outlined),
+                title: const Text('พิมพ์สติกเกอร์บาร์โค้ด'),
+                subtitle: const Text('สร้างบาร์โค้ดและพิมพ์สติกเกอร์ติดสินค้า'),
+                onTap: () => context.push('/barcode-labels'),
+              ),
+            ),
           ],
           const SizedBox(height: 8),
           Card(

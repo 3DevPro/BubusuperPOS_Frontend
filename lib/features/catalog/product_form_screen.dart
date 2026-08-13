@@ -41,6 +41,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
 
   bool _lookingUp = false;
   ProductLookupDto? _referencePrice;
+  bool _generatingBarcode = false;
 
   bool _uploadingImage = false;
 
@@ -201,6 +202,24 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     }
   }
 
+  // Only available once the product exists (POST /{id}/barcode needs an id),
+  // so this button only shows up while editing, not on the create form.
+  Future<void> _generateBarcode() async {
+    if (_generatingBarcode) return;
+    setState(() => _generatingBarcode = true);
+    try {
+      final product = await ref.read(productRepositoryProvider).assignBarcode(widget.productId!);
+      ref.invalidate(productListProvider);
+      if (mounted && product.barcode != null) setState(() => _barcodeController.text = product.barcode!);
+    } on DioException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('สร้างบาร์โค้ดไม่สำเร็จ')));
+      }
+    } finally {
+      if (mounted) setState(() => _generatingBarcode = false);
+    }
+  }
+
   Future<void> _pickAndUploadImage() async {
     final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (picked == null || !mounted) return;
@@ -317,6 +336,17 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
             ),
           ],
         ),
+        if (widget.isEditing && _barcodeController.text.trim().isEmpty)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _generatingBarcode ? null : _generateBarcode,
+              icon: _generatingBarcode
+                  ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.qr_code_2, size: 18),
+              label: const Text('สร้างบาร์โค้ด'),
+            ),
+          ),
         const SizedBox(height: 12),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -354,9 +384,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
               alignment: Alignment.center,
               children: [
                 // Same size/fit as the POS product card (see pos_screen.dart's
-                // _ProductCard) — BoxFit.contain, not cover, so this preview
-                // is a truthful WYSIWYG of what shows on the sales screen,
-                // not just a distinct crop of it.
+                // _ProductCard) — BoxFit.cover, so this preview is a truthful
+                // WYSIWYG of what shows on the sales screen.
                 _imageUrlController.text.trim().isEmpty
                     ? Container(
                         width: double.infinity,
@@ -372,7 +401,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                           _imageUrlController.text.trim(),
                           width: double.infinity,
                           height: 160,
-                          fit: BoxFit.contain,
+                          fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) => Container(
                             width: double.infinity,
                             height: 160,

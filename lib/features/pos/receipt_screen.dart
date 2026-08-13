@@ -7,8 +7,10 @@ import 'package:printing/printing.dart';
 import '../../shared/formatters.dart';
 import '../auth/auth_provider.dart';
 import '../settings/settings_providers.dart';
+import '../settings/tenant_repository.dart';
 import 'checkout_screen.dart' show salesRepositoryProvider;
 import 'receipt_pdf.dart';
+import 'receipt_print_settings.dart';
 import 'sales_repository.dart';
 
 final saleDetailProvider = FutureProvider.autoDispose.family<SaleResultDto, String>((ref, saleId) {
@@ -24,8 +26,13 @@ const _saleStatusLabels = {
 };
 
 class ReceiptScreen extends ConsumerStatefulWidget {
-  const ReceiptScreen({super.key, required this.saleId});
+  const ReceiptScreen({super.key, required this.saleId, this.autoPrint = false});
   final String saleId;
+  // Set only on the navigation straight out of checkout (see checkout_screen
+  // .dart) — never on a later visit from sales history — so the "print
+  // automatically after checkout" setting doesn't reprint every time the
+  // receipt is reopened.
+  final bool autoPrint;
 
   @override
   ConsumerState<ReceiptScreen> createState() => _ReceiptScreenState();
@@ -33,12 +40,17 @@ class ReceiptScreen extends ConsumerStatefulWidget {
 
 class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
   bool _sharing = false;
+  bool _printing = false;
+  bool _autoPrintTriggered = false;
+
+  TenantSettingsDto? get _tenant => ref.read(tenantSettingsProvider).asData?.value;
 
   Future<void> _shareReceipt(SaleResultDto sale) async {
+    final tenant = _tenant;
+    if (tenant == null) return;
     setState(() => _sharing = true);
     try {
-      final shopName = ref.read(tenantSettingsProvider).asData?.value.name ?? '';
-      final bytes = await buildReceiptPdf(sale: sale, shopName: shopName);
+      final bytes = await buildReceiptPdf(sale: sale, tenant: tenant);
       await Printing.sharePdf(bytes: bytes, filename: '${sale.receiptNo}.pdf');
     } catch (_) {
       if (mounted) {
@@ -49,16 +61,111 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     }
   }
 
+  Future<void> _printReceipt(SaleResultDto sale) async {
+    final tenant = _tenant;
+    if (tenant == null) return;
+    final paperSize = ref.read(receiptPrintSettingsProvider).asData?.value.paperSize ?? ReceiptPaperSize.mm80;
+    setState(() => _printing = true);
+    try {
+      await Printing.layoutPdf(
+        name: sale.receiptNo,
+        format: paperSize.pageFormat,
+        onLayout: (format) => buildReceiptPdf(sale: sale, tenant: tenant, pageFormat: format),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('พิมพ์ใบเสร็จไม่สำเร็จ')));
+      }
+    } finally {
+      if (mounted) setState(() => _printing = false);
+    }
+  }
+
+  void _showPrintSettings(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Consumer(
+        builder: (context, ref, _) {
+          final settingsAsync = ref.watch(receiptPrintSettingsProvider);
+          final settings = settingsAsync.valueOrNull ?? ReceiptPrintSettings.defaults;
+          return AlertDialog(
+            title: const Text('ตั้งค่าการพิมพ์'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('ขนาดกระดาษ'),
+                const SizedBox(height: 8),
+                RadioGroup<ReceiptPaperSize>(
+                  groupValue: settings.paperSize,
+                  onChanged: (v) => ref.read(receiptPrintSettingsProvider.notifier).updateSettings(paperSize: v),
+                  child: Column(
+                    children: [
+                      for (final size in ReceiptPaperSize.values)
+                        RadioListTile<ReceiptPaperSize>(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(size.label),
+                          value: size,
+                        ),
+                    ],
+                  ),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('พิมพ์อัตโนมัติหลังชำระเงิน'),
+                  value: settings.autoPrintAfterCheckout,
+                  onChanged: (v) =>
+                      ref.read(receiptPrintSettingsProvider.notifier).updateSettings(autoPrintAfterCheckout: v),
+                ),
+              ],
+            ),
+            actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('เสร็จสิ้น'))],
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final saleAsync = ref.watch(saleDetailProvider(widget.saleId));
+    final tenantAsync = ref.watch(tenantSettingsProvider);
+    final printSettingsAsync = ref.watch(receiptPrintSettingsProvider);
     final role = ref.watch(authControllerProvider).me?['role'];
     final canRefund = role == 'owner' || role == 'manager';
+
+    if (widget.autoPrint && !_autoPrintTriggered) {
+      final sale = saleAsync.valueOrNull;
+      final settings = printSettingsAsync.valueOrNull;
+      if (sale != null && tenantAsync.hasValue && settings != null && settings.autoPrintAfterCheckout) {
+        _autoPrintTriggered = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) => _printReceipt(sale));
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('ใบเสร็จ'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'ตั้งค่าการพิมพ์',
+            onPressed: () => _showPrintSettings(context),
+          ),
+          saleAsync.maybeWhen(
+            data: (sale) => IconButton(
+              icon: _printing
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.print),
+              tooltip: 'พิมพ์ใบเสร็จ',
+              onPressed: _printing ? null : () => _printReceipt(sale),
+            ),
+            orElse: () => const SizedBox.shrink(),
+          ),
           saleAsync.maybeWhen(
             data: (sale) => IconButton(
               icon: _sharing

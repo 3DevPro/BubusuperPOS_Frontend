@@ -1,13 +1,20 @@
 class PendingSaleItem {
-  const PendingSaleItem({required this.productId, required this.qty});
+  const PendingSaleItem({required this.productId, required this.qty, this.discount = '0'});
 
   final String productId;
   final int qty;
+  final String discount;
 
-  Map<String, dynamic> toJson() => {'product_id': productId, 'qty': qty};
+  Map<String, dynamic> toJson() => {'product_id': productId, 'qty': qty, 'discount': discount};
 
-  factory PendingSaleItem.fromJson(Map<String, dynamic> json) =>
-      PendingSaleItem(productId: json['product_id'] as String, qty: json['qty'] as int);
+  // '0' fallback covers sales that were already queued (and persisted to
+  // shared_preferences) before this field existed — they replay with no
+  // per-item discount rather than failing to parse.
+  factory PendingSaleItem.fromJson(Map<String, dynamic> json) => PendingSaleItem(
+    productId: json['product_id'] as String,
+    qty: json['qty'] as int,
+    discount: json['discount'] as String? ?? '0',
+  );
 }
 
 /// A sale that failed to reach the backend because of a network error and is
